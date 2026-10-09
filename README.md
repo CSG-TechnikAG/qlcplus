@@ -4,8 +4,8 @@
   </a>
 </p>
 
-<h1 align="center">Q Light Controller+</h1>
-<p align="center"><em>(Often abbreviated as "QLC+")</em></p>
+<h1 align="center">Q Light Controller++</h1>
+<p align="center"><em>(Often abbreviated as "QLC++")</em></p>
 <p align="center">
   <strong>Open-source lighting control for DMX, Art-Net, sACN and more.</strong><br/>
   Designed for live shows, theatre, architectural installations, and venues.
@@ -39,7 +39,7 @@
 
 ## Introduction
 
-**QLC+** is powerful and user-friendly software to control lighting. QLC+ supports a [huge amount of hardware,](https://qlcplus.org/discover/compatibility) runs on Linux, Windows (10+), macOS (10.12+), and Raspberry Pi. Whether you're an experienced lighting professional or just getting started, QLC+ empowers you to take control of your lighting fixtures with ease. The primary goal of this project is to bring QLC+ to the level of available commercial software.
+**QLC++** is powerful and user-friendly software to control lighting. QLC++ supports a [huge amount of hardware,](https://qlcplus.org/discover/compatibility) runs on Linux, Windows (10+), macOS (10.12+), and Raspberry Pi. Whether you're an experienced lighting professional or just getting started, QLC++ empowers you to take control of your lighting fixtures with ease. The primary goal of this project is to bring QLC++ to the level of available commercial software.
 
 ### Supported protocols
 
@@ -51,7 +51,7 @@
 [![E1.31/S.ACN](https://img.shields.io/badge/E1.31%20S.ACN-%23323330.svg?style=for-the-badge&logo=aiohttp&logoColor=%23F7DF1E)](https://docs.qlcplus.org/v4/plugins/e1-31-sacn)
 [![OS2L](https://img.shields.io/badge/OS2L-%23323330.svg?style=for-the-badge&logo=aiohttp&logoColor=%23F7DF1E)](https://docs.qlcplus.org/v4/plugins/os2l)
 
-### QLC+ on social media
+### QLC++ on social media
 
 [![Instagram](https://img.shields.io/badge/Instagram-%23E4405F.svg?style=flat-square&logo=Instagram)](https://www.instagram.com/qlcplus/) 
 [![YouTube (v4)](https://img.shields.io/badge/YouTube%20(v4)-%23FF0000.svg?style=flat-square&logo=YouTube)](https://www.youtube.com/playlist?list=PLHT-wIriuitDiW4A9oKSDr__Z_jcmMVdi) 
@@ -60,10 +60,10 @@
 
 ## Support & bug reports
 
-We have a dedicated page to help you find support, please check out [SUPPORT.md](SUPPORT.md). To learn about a specific feature of QLC+, take a look at the [official documentation](https://docs.qlcplus.org/). To give feedback, submit new fixtures and get new ideas, go to the [forum](https://www.qlcplus.org/forum/index.php)
+We have a dedicated page to help you find support, please check out [SUPPORT.md](SUPPORT.md). To learn about a specific feature of QLC++, take a look at the [official documentation](https://docs.qlcplus.org/). To give feedback, submit new fixtures and get new ideas, go to the [forum](https://www.qlcplus.org/forum/index.php)
 
 ### Help wanted
-Click the badge below to see the currently confirmed issues with QLC+. Perhaps you can find a solution?
+Click the badge below to see the currently confirmed issues with QLC++. Perhaps you can find a solution?
 
 [![Help Wanted](https://img.shields.io/github/issues/mcallegari/qlcplus/issue%20confirmed?logo=github&color=red)](https://github.com/mcallegari/qlcplus/issues?q=is%3Aopen+is%3Aissue+label%3A%22issue+confirmed%22)
 
