@@ -21,6 +21,7 @@ jobs:
       CXX: g++
       PACKAGES_BASE:
         gdb
+        pkg-config
         libasound2-dev
         libusb-1.0-0-dev
         libftdi1-dev
@@ -96,11 +97,20 @@ jobs:
           echo "QT: ${QT}"
           echo "NPROC: ${NPROC}"
 
-      - name: Download, cache and install packages
-        uses: awalsh128/cache-apt-pkgs-action@v1.6.3
-        with:
-          packages: ${{env.PACKAGES_ALL}}
-          version: ${{runner.os}}-apt
+      - name: Install packages
+        # NOTE: awalsh128/cache-apt-pkgs-action can restore a stale cache and
+        # silently leave packages uninstalled (see upstream issue #57), which
+        # then makes CMake fail with "Neither libftdi-0.X nor libftdi-1.X
+        # found!". Install them directly so the build dependencies are always
+        # present.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ${{ env.PACKAGES_ALL }}
+          # Fail early with a clear message if the USB DMX dependencies are missing
+          pkg-config --exists libftdi1 libusb-1.0 || {
+            echo "ERROR: libftdi1 / libusb-1.0 development packages are missing"
+            exit 1
+          }
 
       - name: Install Qt through aqt (and python)
         uses: jurplel/install-qt-action@v4
