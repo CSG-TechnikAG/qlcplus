@@ -27,6 +27,7 @@
 
 class MonitorProperties;
 class MonitorFixtureItem;
+class QGraphicsRectItem;
 class Doc;
 
 /** \addtogroup ui_mon DMX Monitor
@@ -41,11 +42,15 @@ public:
     MonitorGraphicsView(Doc *doc, QWidget *parent = 0);
     ~MonitorGraphicsView();
 
-    /** Set the graphics view size in monitor units */
-    void setGridSize(QSize size);
+    /** Set the graphics view size in monitor units (may be fractional) */
+    void setGridSize(QSizeF size);
 
     /** Get the grid size in monitor units */
-    QSize gridSize() const { return m_gridSize; }
+    QSizeF gridSize() const { return m_gridSize; }
+
+    /** Set the Stage Geometry stage footprint (metres) and its offset inside
+     *  the room, to draw as an overlay. */
+    void setStage(double sx, double sy, double offX, double offY);
 
     /** Set the measure unit to use */
     void setGridMetrics(float value);
@@ -75,6 +80,9 @@ public:
 
     /** Add a fixture to the current view */
     void addFixture(quint32 id, QPointF pos = QPointF(0, 0));
+
+    /** Move an existing fixture (adds it if not present) */
+    void setFixturePosition(quint32 id, QPointF pos);
 
     /** Remove the fixture with the given ID from the view
      *  If no ID is specified, the currently selected
@@ -127,10 +135,10 @@ private:
     QGraphicsScene *m_scene;
 
     /** Size of the grid. How many horizontal and vertical cells */
-    QSize m_gridSize;
+    QSizeF m_gridSize;
 
     /** Size of a grid cell in pixels */
-    int m_cellPixels;
+    qreal m_cellPixels;
 
     /** X offset of the grid to keep it centered */
     qreal m_xOffset;
@@ -153,6 +161,13 @@ private:
     QPixmap m_bgPixmap;
 
     QGraphicsPixmapItem *m_bgItem;
+
+    /** Stage Geometry stage footprint (metres) drawn as an overlay */
+    double m_stageW;
+    double m_stageH;
+    double m_stageOffX;
+    double m_stageOffY;
+    QGraphicsRectItem *m_stageItem;
 
     /** Map of the rendered MonitorFixtureItem with their ID */
     QHash <quint32, MonitorFixtureItem*> m_fixtures;

@@ -21,7 +21,7 @@
 	<string>qlcplus-launcher</string>
 
 	<key>CFBundleName</key>
-	<string>Q Light Controller Plus</string>
+	<string>Q Light Controller ++</string>
 
 	<key>CFBundleIdentifier</key>
 	<string>org.qlcplus.macos</string>

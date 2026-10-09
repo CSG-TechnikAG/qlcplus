@@ -10,12 +10,12 @@
 !define MUI_HEADERIMAGE
 !define MUI_HEADERIMAGE_BITMAP "${NSISDIR}\Contrib\Graphics\Header\nsis3-vintage.bmp"
 !define MUI_HEADERIMAGE_LEFT
-!define MUI_PAGE_HEADER_TEXT "Q Light Controller Plus"
+!define MUI_PAGE_HEADER_TEXT "Q Light Controller ++"
 
 ;--------------------------------
 ;General
-Name "Q Light Controller Plus"
-OutFile "QLC+_4.14.5.exe"
+Name "Q Light Controller ++"
+OutFile "QLC+_4.15.exe"
 InstallDir C:\QLC+
 InstallDirRegKey HKCU "Software\qlcplus" "Install_Dir"
 RequestExecutionLevel user
@@ -46,14 +46,14 @@ Page instfiles
 Function StartMenuGroupSelect
 	Push $R1
 
-	StartMenu::Select /checknoshortcuts "Don't create a start menu folder" /autoadd /lastused $R0 "Q Light Controller Plus"
+	StartMenu::Select /checknoshortcuts "Don't create a start menu folder" /autoadd /lastused $R0 "Q Light Controller ++"
 	Pop $R1
 
 	StrCmp $R1 "success" success
 	StrCmp $R1 "cancel" done
 		; error
 		MessageBox MB_OK $R1
-		StrCpy $R0 "Q Light Controller Plus" # use default
+		StrCpy $R0 "Q Light Controller ++" # use default
 		Return
 	success:
 	Pop $R0
@@ -69,7 +69,7 @@ Section
 	StrCpy $R1 $R0 1
 	StrCmp $R1 ">" skip
 		CreateDirectory $SMPROGRAMS\$R0
-		CreateShortCut '$SMPROGRAMS\$R0\Q Light Controller Plus.lnk' $INSTDIR\qlcplus.exe
+		CreateShortCut '$SMPROGRAMS\$R0\Q Light Controller ++.lnk' $INSTDIR\qlcplus.exe
 
 		CreateDirectory $SMPROGRAMS\$R0
 		CreateShortCut '$SMPROGRAMS\$R0\Fixture Definition Editor.lnk' $INSTDIR\qlcplus-fixtureeditor.exe
@@ -101,12 +101,12 @@ Section
 	File /r Web
 
 	WriteRegStr HKCR ".qxw" "" "QLightControllerPlus.Document"
-	WriteRegStr HKCR "QLightControllerPlus.Document" "" "Q Light Controller Plus Workspace"
+	WriteRegStr HKCR "QLightControllerPlus.Document" "" "Q Light Controller ++ Workspace"
 	WriteRegStr HKCR "QLightControllerPlus.Document\DefaultIcon" "" "$INSTDIR\qlcplus.exe,0"
 	WriteRegStr HKCR "QLightControllerPlus.Document\shell\open\command" "" '"$INSTDIR\qlcplus.exe" --open "%1"'
 
 	WriteRegStr HKCR ".qxf" "" "QLightControllerPlusFixture.Document"
-	WriteRegStr HKCR "QLightControllerPlusFixture.Document" "" "Q Light Controller Plus Fixture"
+	WriteRegStr HKCR "QLightControllerPlusFixture.Document" "" "Q Light Controller ++ Fixture"
 	WriteRegStr HKCR "QLightControllerPlusFixture.Document\DefaultIcon" "" "$INSTDIR\qlcplus-fixtureeditor.exe,0"
 	WriteRegStr HKCR "QLightControllerPlusFixture.Document\shell\open\command" "" '"$INSTDIR\qlcplus-fixtureeditor.exe" --open "%1"'
 

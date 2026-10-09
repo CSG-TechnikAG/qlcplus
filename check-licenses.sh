@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-#  Q Light Controller Plus
+#  Q Light Controller ++
 #  check-licenses.sh
 #
 #  Copyright (c) 2015 Dave Olsthoorn

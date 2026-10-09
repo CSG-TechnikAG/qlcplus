@@ -33,6 +33,7 @@ class QScrollArea;
 class QComboBox;
 class QSplitter;
 class QToolBar;
+class QDoubleSpinBox;
 class QSpinBox;
 class QAction;
 class Fixture;
@@ -176,10 +177,10 @@ protected:
 
 protected slots:
     /** Slot called when the grid width changes */
-    void slotGridWidthChanged(int value);
+    void slotGridWidthChanged(double value);
 
     /** Slot called when the grid height changes */
-    void slotGridHeightChanged(int value);
+    void slotGridHeightChanged(double value);
 
     /** Slot called when the unit metrics changes */
     void slotGridUnitsChanged(int index);
@@ -206,13 +207,34 @@ protected slots:
     /** Slot called when the graphics view is clicked */
     void slotViewClicked();
 
+    /** Refresh the Stage Geometry stage overlay in the 2D view */
+    void updateStageOverlay();
+
+    /** Push the Stage Geometry setup fields to the Stage Geometry tab */
+    void slotStageGeometryChanged();
+
+    /** A calibrated lamp moved in the Stage Geometry: place it in the view */
+    void slotStageFixturePosition(quint32 id, double x, double y, double z);
+
+private:
+    /** Convert Stage Geometry world (metres, y-up) to Monitor mm (y-down). */
+    QPointF worldToMonitorMm(double x, double y) const;
+    /** Convert Monitor mm (y-down) to Stage Geometry world (metres, y-up). */
+    void monitorMmToWorld(const QPointF &mm, double &x, double &y) const;
+
 protected:
     QToolBar* m_graphicsToolBar;
     QSplitter* m_splitter;
     MonitorGraphicsView* m_graphicsView;
     QWidget *m_fixtureItemEditor;
-    QSpinBox* m_gridWSpin;
-    QSpinBox *m_gridHSpin;
+    QDoubleSpinBox* m_gridWSpin;
+    QDoubleSpinBox *m_gridHSpin;
+    QDoubleSpinBox *m_stageWSpin;
+    QDoubleSpinBox *m_stageHSpin;
+    QDoubleSpinBox *m_stageOffXSpin;
+    QDoubleSpinBox *m_stageOffYSpin;
+    QDoubleSpinBox *m_stageHeightSpin;
+    QDoubleSpinBox *m_roomHSpin;
     QComboBox *m_unitsCombo;
     QAction *m_labelsAction;
 };

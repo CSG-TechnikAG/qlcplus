@@ -1,5 +1,5 @@
 [Unit]
-Description=Q Light Controller Plus
+Description=Q Light Controller ++
 Documentation=man:qlcplus(1)
 After=graphical.target
 DefaultDependencies=no

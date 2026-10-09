@@ -693,7 +693,7 @@ void VCSliderProperties::slotAttachPlaybackFunctionClicked()
     fs.setMultiSelection(false);
     fs.setFilter(Function::SceneType | Function::ChaserType | Function::SequenceType |
                  Function::EFXType | Function::AudioType | Function::RGBMatrixType |
-                 Function::CollectionType | Function::VideoType, false);
+                 Function::CollectionType | Function::VideoType | Function::PathType, false);
     fs.disableFilters(Function::ScriptType | Function::ShowType);
 
     if (fs.exec() != QDialog::Accepted)

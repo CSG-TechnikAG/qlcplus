@@ -1,6 +1,8 @@
 name: QLCplus Github Actions CI Build
 
-on: ["push", "pull_request"]
+on:
+  # Manual runs only (Actions tab -> "Run workflow")
+  workflow_dispatch:
 
 jobs:
   build-linux:
@@ -240,7 +242,7 @@ jobs:
           wget -c https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage -O ./appimagetool-x86_64.AppImage
           chmod a+x ./appimagetool-x86_64.AppImage
           ./appimagetool-x86_64.AppImage -v ${INSTALL_ROOT}
-          mv -v Q_Light_Controller_Plus_-_QLC+-x86_64.AppImage qlcplus-${{env.TASK}}-${{env.APPVERSION}}-${{env.BUILD_DATE}}-${{env.GIT_REV}}.AppImage
+          mv -v Q_Light_Controller_++_-_QLC+-x86_64.AppImage qlcplus-${{env.TASK}}-${{env.APPVERSION}}-${{env.BUILD_DATE}}-${{env.GIT_REV}}.AppImage
 
       - name: Test Load AppImage
         if: ${{ matrix.task == 'build-v5' }}
@@ -599,7 +601,7 @@ jobs:
           command: |
             OUTDIR=$PWD
             cd platforms/macos/dmg
-            ./create-dmg --volname "Q Light Controller Plus ${{env.APPVERSION}}" \
+            ./create-dmg --volname "Q Light Controller ++ ${{env.APPVERSION}}" \
             --volicon $OUTDIR/resources/icons/qlcplus.icns \
             --background background.png \
             --window-size 400 300 \

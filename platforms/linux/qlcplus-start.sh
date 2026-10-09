@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-#  Q Light Controller Plus
+#  Q Light Controller ++
 #  qlcplus-start.sh
 #
 #  Copyright (c) 2024 Massimo Callegari

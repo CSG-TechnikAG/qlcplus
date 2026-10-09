@@ -63,7 +63,7 @@ int main(int argc, char *argv[])
     printVersion();
 
     QCommandLineParser parser;
-    parser.setApplicationDescription("Q Light Controller Plus");
+    parser.setApplicationDescription("Q Light Controller ++");
 
     parser.addHelpOption();
     parser.addVersionOption();

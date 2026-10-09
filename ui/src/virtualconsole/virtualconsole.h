@@ -171,6 +171,7 @@ protected:
     QAction* m_addAudioTriggersAction;
     QAction* m_addClockAction;
     QAction* m_addAnimationAction;
+    QAction* m_addStageMapAction;
 
     QAction* m_toolsSettingsAction;
     QAction* m_functionWizardAction;
@@ -244,6 +245,7 @@ public slots:
     void slotAddAudioTriggers();
     void slotAddClock();
     void slotAddAnimation();
+    void slotAddStageMap();
 
     /*********************************************************************
      * Tools menu callbacks

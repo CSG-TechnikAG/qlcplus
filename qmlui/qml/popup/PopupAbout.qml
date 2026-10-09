@@ -51,7 +51,7 @@ CustomPopupDialog
                 font.family: UISettings.robotoFontName
                 font.pixelSize: UISettings.textSizeDefault
                 text: "<h3>" + qlcplus.appName + "<br>" + qlcplus.appVersion + "</h3>\n" +
-                      "Copyright Ⓒ <b>Massimo Callegari, Heikki Junnila</b> " + qsTr("and contributors") + "<br>" +
+                      "Copyright Ⓒ <b>Massimo Callegari, Heikki Junnila, CSG Technik-AG</b> " + qsTr("and contributors") + "<br>" +
                       qsTr("Website") + ": <a href='https://www.qlcplus.org'>https://www.qlcplus.org</a><br><br>" +
                       qsTr("This application is licensed under the terms of the") +
                       " <a href='https://www.apache.org/licenses/LICENSE-2.0'>" +

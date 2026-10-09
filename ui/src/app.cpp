@@ -40,6 +40,7 @@
 #include "mastertimer.h"
 #include "addresstool.h"
 #include "simpledesk.h"
+#include "stagegeometry.h"
 #include "aboutbox.h"
 #include "monitor.h"
 #include "vcframe.h"
@@ -168,6 +169,9 @@ App::~App()
     if (SimpleDesk::instance() != NULL)
         delete SimpleDesk::instance();
 
+    if (StageGeometry::instance() != NULL)
+        delete StageGeometry::instance();
+
     if (m_dumpProperties != NULL)
         delete m_dumpProperties;
 
@@ -293,6 +297,8 @@ void App::init()
     m_tab->addTab(w, QIcon(":/virtualconsole.png"), tr("Virtual Console"));
     w = new SimpleDesk(m_tab, m_doc);
     m_tab->addTab(w, QIcon(":/slidermatrix.png"), tr("Simple Desk"));
+    w = new StageGeometry(m_tab, m_doc);
+    m_tab->addTab(w, QIcon(":/beam.png"), tr("Stage Geometry"));
     w = new InputOutputManager(m_tab, m_doc);
     m_tab->addTab(w, QIcon(":/input_output.png"), tr("Inputs/Outputs"));
 
@@ -462,7 +468,7 @@ void App::slotSetProgressText(const QString& text)
     static int progress = 0;
     m_progressDialog->setValue(progress++);
     m_progressDialog->setLabelText(QString("<B>%1</B><BR/>%2")
-                                   .arg(tr("Starting Q Light Controller Plus"))
+                                   .arg(tr("Starting Q Light Controller ++"))
                                    .arg(text));
     QApplication::processEvents();
 }
@@ -480,6 +486,8 @@ void App::clearDocument()
     if (Monitor::instance() != NULL)
         Monitor::instance()->updateView();
     SimpleDesk::instance()->clearContents();
+    if (StageGeometry::instance() != NULL)
+        StageGeometry::instance()->clearContents();
     m_doc->inputOutputMap()->resetUniverses();
     setFileName(QString());
     m_doc->resetModified();
@@ -588,6 +596,8 @@ void App::enableKioskMode()
     m_tab->removeTab(m_tab->indexOf(FunctionManager::instance()));
     m_tab->removeTab(m_tab->indexOf(ShowManager::instance()));
     m_tab->removeTab(m_tab->indexOf(SimpleDesk::instance()));
+    if (StageGeometry::instance() != NULL)
+        m_tab->removeTab(m_tab->indexOf(StageGeometry::instance()));
     m_tab->removeTab(m_tab->indexOf(InputOutputManager::instance()));
 
     // Hide the tab bar to save some pixels
@@ -1450,6 +1460,11 @@ bool App::loadXML(QXmlStreamReader& doc, bool goToConsole, bool fromMemory)
         {
             SimpleDesk::instance()->loadXML(doc);
         }
+        else if (doc.name() == KXMLQLCStageGeometry)
+        {
+            if (StageGeometry::instance() != NULL)
+                StageGeometry::instance()->loadXML(doc);
+        }
         else if (doc.name() == KXMLFixture)
         {
             /* Legacy support code, nowadays in Doc */
@@ -1539,6 +1554,10 @@ QFile::FileError App::saveXML(const QString& fileName, bool autosave)
 
     /* Write Simple Desk to the XML document */
     SimpleDesk::instance()->saveXML(&doc);
+
+    /* Write Stage Geometry to the XML document */
+    if (StageGeometry::instance() != NULL)
+        StageGeometry::instance()->saveXML(&doc);
 
     doc.writeEndElement(); // close KXMLQLCWorkspace
 

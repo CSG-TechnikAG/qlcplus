@@ -51,6 +51,7 @@
 #include "vclabel.h"
 #include "vcxypad.h"
 #include "vcclock.h"
+#include "vcstagemap.h"
 #include "apputil.h"
 #include "doc.h"
 
@@ -1268,6 +1269,18 @@ bool VCFrame::loadXML(QXmlStreamReader &root)
             {
                 addWidgetToPageMap(clock);
                 clock->show();
+            }
+        }
+        else if (root.name() == KXMLQLCVCStageMap)
+        {
+            /* Create a new VCStageMap into its parent */
+            VCStageMap* map = new VCStageMap(this, m_doc);
+            if (map->loadXML(root) == false)
+                delete map;
+            else
+            {
+                addWidgetToPageMap(map);
+                map->show();
             }
         }
         else if (root.name() == KXMLQLCVCMatrix)

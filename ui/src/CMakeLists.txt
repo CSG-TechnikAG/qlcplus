@@ -49,6 +49,7 @@ add_library(${module_name}
     customfeedbackdialog.cpp customfeedbackdialog.h customfeedbackdialog.ui
     dmxdumpfactory.cpp dmxdumpfactory.h dmxdumpfactory.ui
     efxeditor.cpp efxeditor.h efxeditor.ui
+    pathfunctioneditor.cpp pathfunctioneditor.h
     efxpreviewarea.cpp efxpreviewarea.h
     fixtureconsole.cpp fixtureconsole.h
     fixturegroupeditor.cpp fixturegroupeditor.h fixturegroupeditor.ui
@@ -101,6 +102,11 @@ add_library(${module_name}
     showmanager/videoitem.cpp showmanager/videoitem.h
     simpledesk.cpp simpledesk.h
     simpledeskengine.cpp simpledeskengine.h
+    stagegeometry/stagegeometry.cpp stagegeometry/stagegeometry.h
+    stagegeometry/stagegeometryengine.cpp stagegeometry/stagegeometryengine.h
+    stagegeometry/stagegeometrymath.cpp stagegeometry/stagegeometrymath.h
+    stagegeometry/stagegeometrysolver.cpp stagegeometry/stagegeometrysolver.h
+    stagegeometry/stagegeometryview.cpp stagegeometry/stagegeometryview.h
     speeddial.cpp speeddial.h
     speeddialwidget.cpp speeddialwidget.h
     universeitemwidget.cpp universeitemwidget.h
@@ -114,6 +120,7 @@ add_library(${module_name}
     virtualconsole/vcbuttonproperties.cpp virtualconsole/vcbuttonproperties.h virtualconsole/vcbuttonproperties.ui
     virtualconsole/vcclock.cpp virtualconsole/vcclock.h
     virtualconsole/vcclockproperties.cpp virtualconsole/vcclockproperties.h virtualconsole/vcclockproperties.ui
+    virtualconsole/vcstagemap.cpp virtualconsole/vcstagemap.h
     virtualconsole/vccuelist.cpp virtualconsole/vccuelist.h
     virtualconsole/vccuelistproperties.cpp virtualconsole/vccuelistproperties.h virtualconsole/vccuelistproperties.ui
     virtualconsole/vcdockarea.cpp virtualconsole/vcdockarea.h
@@ -155,6 +162,7 @@ target_include_directories(${module_name} PUBLIC
     ../../webaccess
     monitor
     showmanager
+    stagegeometry
     virtualconsole
 )
 

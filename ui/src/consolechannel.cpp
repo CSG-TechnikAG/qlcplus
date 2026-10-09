@@ -148,7 +148,7 @@ void ConsoleChannel::init()
     m_slider->setVisible(false);
     m_slider->setSliderStyleSheet(style);
     layout()->addWidget(m_slider);
-    //layout()->setAlignment(m_slider, Qt::AlignHCenter);
+    layout()->setAlignment(m_slider, Qt::AlignHCenter);
 
     /* Channel number label */
     m_label = new QLabel(this);

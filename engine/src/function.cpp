@@ -38,6 +38,7 @@
 #include "audio.h"
 #include "video.h"
 #include "scene.h"
+#include "pathfunction.h"
 #include "show.h"
 #include "efx.h"
 #include "doc.h"
@@ -54,6 +55,7 @@ const QString KShowString       (       "Show" );
 const QString KSequenceString   (   "Sequence" );
 const QString KAudioString      (      "Audio" );
 const QString KVideoString      (      "Video" );
+const QString KPathString       (       "Path" );
 const QString KUndefinedString  (  "Undefined" );
 
 const QString KLoopString       (       "Loop" );
@@ -252,6 +254,7 @@ QString Function::typeToString(Type type)
         case SequenceType:   return KSequenceString;
         case AudioType:      return KAudioString;
         case VideoType:      return KVideoString;
+        case PathType:       return KPathString;
         case Undefined:
         default:
             return KUndefinedString;
@@ -280,6 +283,8 @@ Function::Type Function::stringToType(const QString& string)
         return AudioType;
     else if (string == KVideoString)
         return VideoType;
+    else if (string == KPathString)
+        return PathType;
     else
         return Undefined;
 }
@@ -947,6 +952,8 @@ bool Function::loader(QXmlStreamReader &root, Doc* doc)
         function = new class Audio(doc);
     else if (type == Function::VideoType)
         function = new class Video(doc);
+    else if (type == Function::PathType)
+        function = new class PathFunction(doc);
     else
         return false;
 

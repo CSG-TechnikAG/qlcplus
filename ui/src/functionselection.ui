@@ -157,6 +157,16 @@
         </property>
        </widget>
       </item>
+      <item row="2" column="0">
+       <widget class="QCheckBox" name="m_pathCheck">
+        <property name="toolTip">
+         <string>Display Path functions in the list</string>
+        </property>
+        <property name="text">
+         <string>Paths</string>
+        </property>
+       </widget>
+      </item>
       <item row="0" column="4">
        <widget class="QCheckBox" name="m_showCheck">
         <property name="text">

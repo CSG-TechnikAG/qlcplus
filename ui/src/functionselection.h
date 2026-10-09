@@ -142,6 +142,7 @@ protected slots:
     void slotShowChecked(bool state);
     void slotAudioChecked(bool state);
     void slotVideoChecked(bool state);
+    void slotPathChecked(bool state);
 
 private:
     int m_filter;

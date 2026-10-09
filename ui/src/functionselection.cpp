@@ -50,7 +50,7 @@ FunctionSelection::FunctionSelection(QWidget* parent, Doc* doc)
     , m_runningOnlyFlag(false)
     , m_filter(Function::SceneType | Function::ChaserType | Function::SequenceType | Function::CollectionType |
                Function::EFXType | Function::ScriptType | Function::RGBMatrixType |
-               Function::ShowType | Function::AudioType | Function::VideoType)
+               Function::ShowType | Function::AudioType | Function::VideoType | Function::PathType)
     , m_disableFilters(0)
     , m_constFilter(false)
 {
@@ -109,6 +109,9 @@ FunctionSelection::FunctionSelection(QWidget* parent, Doc* doc)
     connect(m_videoCheck, SIGNAL(toggled(bool)),
             this, SLOT(slotVideoChecked(bool)));
 
+    connect(m_pathCheck, SIGNAL(toggled(bool)),
+            this, SLOT(slotPathChecked(bool)));
+
     QSettings settings;
     QVariant var = settings.value(SETTINGS_FILTER);
     if (var.isValid() == true)
@@ -131,6 +134,7 @@ int FunctionSelection::exec()
     m_showCheck->setChecked(m_filter & Function::ShowType);
     m_audioCheck->setChecked(m_filter & Function::AudioType);
     m_videoCheck->setChecked(m_filter & Function::VideoType);
+    m_pathCheck->setChecked(m_filter & Function::PathType);
 
     if (m_constFilter == true)
     {
@@ -144,6 +148,7 @@ int FunctionSelection::exec()
         m_showCheck->setEnabled(false);
         m_audioCheck->setEnabled(false);
         m_videoCheck->setEnabled(false);
+        m_pathCheck->setEnabled(false);
     }
     else
     {
@@ -157,6 +162,7 @@ int FunctionSelection::exec()
         m_showCheck->setDisabled(m_disableFilters & Function::ShowType);
         m_audioCheck->setDisabled(m_disableFilters & Function::AudioType);
         m_videoCheck->setDisabled(m_disableFilters & Function::VideoType);
+        m_pathCheck->setDisabled(m_disableFilters & Function::PathType);
     }
 
     /* Multiple/single selection */
@@ -451,5 +457,14 @@ void FunctionSelection::slotVideoChecked(bool state)
         m_filter = (m_filter | Function::VideoType);
     else
         m_filter = (m_filter & ~Function::VideoType);
+    refillTree();
+}
+
+void FunctionSelection::slotPathChecked(bool state)
+{
+    if (state == true)
+        m_filter = (m_filter | Function::PathType);
+    else
+        m_filter = (m_filter & ~Function::PathType);
     refillTree();
 }

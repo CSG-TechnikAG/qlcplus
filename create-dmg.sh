@@ -114,7 +114,7 @@ fi
 # Create Apple Disk iMaGe from ~/QLC+.app/
 OUTDIR=$PWD
 cd platforms/macos/dmg
-./create-dmg --volname "Q Light Controller Plus $VERSION" \
+./create-dmg --volname "Q Light Controller ++ $VERSION" \
     --volicon $OUTDIR/resources/icons/qlcplus.icns \
     --background background.png \
     --window-size 400 300 \

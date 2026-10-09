@@ -70,3 +70,5 @@ debian/qlcplus-data/
 debian/qlcplus-dbg/
 debian/qlcplus5-dbg/
 debian/tmp/
+*.pyc
+/OPENCODE_RESOURCES

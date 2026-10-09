@@ -29,6 +29,7 @@
 #include <QSettings>
 #include <QToolBar>
 #include <QSpinBox>
+#include <QDoubleSpinBox>
 #include <QAction>
 #include <QScreen>
 #include <QLabel>
@@ -41,6 +42,7 @@
 #include "monitorgraphicsview.h"
 #include "fixtureselection.h"
 #include "monitorfixture.h"
+#include "stagegeometry.h"
 #include "monitorlayout.h"
 #include "universe.h"
 #include "monitor.h"
@@ -73,6 +75,12 @@ Monitor::Monitor(QWidget* parent, Doc* doc, Qt::WindowFlags f)
     , m_fixtureItemEditor(NULL)
     , m_gridWSpin(NULL)
     , m_gridHSpin(NULL)
+    , m_stageWSpin(NULL)
+    , m_stageHSpin(NULL)
+    , m_stageOffXSpin(NULL)
+    , m_stageOffYSpin(NULL)
+    , m_stageHeightSpin(NULL)
+    , m_roomHSpin(NULL)
     , m_unitsCombo(NULL)
     , m_labelsAction(NULL)
 {
@@ -209,6 +217,14 @@ void Monitor::initGraphicsView()
     connect(m_graphicsView, SIGNAL(viewClicked(QMouseEvent*)),
             this, SLOT(slotViewClicked()));
 
+    if (StageGeometry::instance() != NULL)
+    {
+        connect(StageGeometry::instance(), SIGNAL(stageChanged()),
+                this, SLOT(updateStageOverlay()));
+        connect(StageGeometry::instance(), SIGNAL(fixturePositionChanged(quint32,double,double,double)),
+                this, SLOT(slotStageFixturePosition(quint32,double,double,double)));
+    }
+
     // add container for chaser editor
     QWidget* econtainer = new QWidget(this);
     m_splitter->addWidget(econtainer);
@@ -249,8 +265,9 @@ void Monitor::fillGraphicsView()
     m_gridHSpin->blockSignals(false);
     m_unitsCombo->blockSignals(false);
 
-    m_graphicsView->setGridSize(QSize(m_props->gridSize().x(), m_props->gridSize().z()));
+    m_graphicsView->setGridSize(QSizeF(m_props->gridSize().x(), m_props->gridSize().z()));
     m_graphicsView->setBackgroundImage(m_props->commonBackgroundImage());
+    updateStageOverlay();
 
     foreach (quint32 fid, m_props->fixtureItemsID())
     {
@@ -498,22 +515,28 @@ void Monitor::initGraphicsToolbar()
 
     QVector3D gridSize = m_props->gridSize();
 
-    m_gridWSpin = new QSpinBox();
-    m_gridWSpin->setMinimum(1);
+    m_gridWSpin = new QDoubleSpinBox();
+    m_gridWSpin->setDecimals(2);
+    m_gridWSpin->setSingleStep(0.5);
+    m_gridWSpin->setMinimum(0.1);
+    m_gridWSpin->setMaximum(1000.0);
     m_gridWSpin->setValue(gridSize.x());
     m_graphicsToolBar->addWidget(m_gridWSpin);
-    connect(m_gridWSpin, SIGNAL(valueChanged(int)),
-            this, SLOT(slotGridWidthChanged(int)));
+    connect(m_gridWSpin, SIGNAL(valueChanged(double)),
+            this, SLOT(slotGridWidthChanged(double)));
 
     QLabel *xlabel = new QLabel("x");
     label->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
     m_graphicsToolBar->addWidget(xlabel);
-    m_gridHSpin = new QSpinBox();
-    m_gridHSpin->setMinimum(1);
+    m_gridHSpin = new QDoubleSpinBox();
+    m_gridHSpin->setDecimals(2);
+    m_gridHSpin->setSingleStep(0.5);
+    m_gridHSpin->setMinimum(0.1);
+    m_gridHSpin->setMaximum(1000.0);
     m_gridHSpin->setValue(gridSize.z());
     m_graphicsToolBar->addWidget(m_gridHSpin);
-    connect(m_gridHSpin, SIGNAL(valueChanged(int)),
-            this, SLOT(slotGridHeightChanged(int)));
+    connect(m_gridHSpin, SIGNAL(valueChanged(double)),
+            this, SLOT(slotGridHeightChanged(double)));
 
     m_unitsCombo = new QComboBox();
     m_unitsCombo->addItem(tr("Meters"), MonitorProperties::Meters);
@@ -523,6 +546,61 @@ void Monitor::initGraphicsToolbar()
     m_graphicsToolBar->addWidget(m_unitsCombo);
     connect(m_unitsCombo, SIGNAL(currentIndexChanged(int)),
             this, SLOT(slotGridUnitsChanged(int)));
+
+    // Stage Geometry setup: stage size, stage offset inside the room, height.
+    m_graphicsToolBar->addSeparator();
+    m_graphicsToolBar->addWidget(new QLabel(tr("Stage")));
+    m_stageWSpin = new QDoubleSpinBox();
+    m_stageWSpin->setDecimals(2);
+    m_stageWSpin->setSingleStep(0.5);
+    m_stageWSpin->setRange(0.1, 1000.0);
+    m_graphicsToolBar->addWidget(m_stageWSpin);
+    connect(m_stageWSpin, SIGNAL(valueChanged(double)),
+            this, SLOT(slotStageGeometryChanged()));
+
+    m_graphicsToolBar->addWidget(new QLabel("x"));
+    m_stageHSpin = new QDoubleSpinBox();
+    m_stageHSpin->setDecimals(2);
+    m_stageHSpin->setSingleStep(0.5);
+    m_stageHSpin->setRange(0.1, 1000.0);
+    m_graphicsToolBar->addWidget(m_stageHSpin);
+    connect(m_stageHSpin, SIGNAL(valueChanged(double)),
+            this, SLOT(slotStageGeometryChanged()));
+
+    m_graphicsToolBar->addWidget(new QLabel(tr("Offset")));
+    m_stageOffXSpin = new QDoubleSpinBox();
+    m_stageOffXSpin->setDecimals(2);
+    m_stageOffXSpin->setSingleStep(0.5);
+    m_stageOffXSpin->setRange(-1000.0, 1000.0);
+    m_graphicsToolBar->addWidget(m_stageOffXSpin);
+    connect(m_stageOffXSpin, SIGNAL(valueChanged(double)),
+            this, SLOT(slotStageGeometryChanged()));
+
+    m_stageOffYSpin = new QDoubleSpinBox();
+    m_stageOffYSpin->setDecimals(2);
+    m_stageOffYSpin->setSingleStep(0.5);
+    m_stageOffYSpin->setRange(-1000.0, 1000.0);
+    m_graphicsToolBar->addWidget(m_stageOffYSpin);
+    connect(m_stageOffYSpin, SIGNAL(valueChanged(double)),
+            this, SLOT(slotStageGeometryChanged()));
+
+    m_graphicsToolBar->addWidget(new QLabel(tr("Stage Z")));
+    m_stageHeightSpin = new QDoubleSpinBox();
+    m_stageHeightSpin->setDecimals(2);
+    m_stageHeightSpin->setSingleStep(0.1);
+    m_stageHeightSpin->setRange(0.0, 1000.0);
+    m_graphicsToolBar->addWidget(m_stageHeightSpin);
+    connect(m_stageHeightSpin, SIGNAL(valueChanged(double)),
+            this, SLOT(slotStageGeometryChanged()));
+
+    m_graphicsToolBar->addWidget(new QLabel(tr("Room H")));
+    m_roomHSpin = new QDoubleSpinBox();
+    m_roomHSpin->setDecimals(2);
+    m_roomHSpin->setSingleStep(0.5);
+    m_roomHSpin->setRange(0.1, 1000.0);
+    m_graphicsToolBar->addWidget(m_roomHSpin);
+    connect(m_roomHSpin, SIGNAL(valueChanged(double)),
+            this, SLOT(slotStageGeometryChanged()));
 
     m_graphicsToolBar->addSeparator();
 
@@ -685,20 +763,99 @@ void Monitor::slotUniverseSelected(int index)
  * Graphics View
  ********************************************************************/
 
-void Monitor::slotGridWidthChanged(int value)
+void Monitor::slotGridWidthChanged(double value)
 {
     Q_ASSERT(m_graphicsView != NULL);
 
-    m_graphicsView->setGridSize(QSize(value, m_gridHSpin->value()));
+    m_graphicsView->setGridSize(QSizeF(value, m_gridHSpin->value()));
     m_props->setGridSize(QVector3D(value, m_props->gridSize().y(), m_gridHSpin->value()));
 }
 
-void Monitor::slotGridHeightChanged(int value)
+void Monitor::slotGridHeightChanged(double value)
 {
     Q_ASSERT(m_graphicsView != NULL);
 
-    m_graphicsView->setGridSize(QSize(m_gridWSpin->value(), value));
+    m_graphicsView->setGridSize(QSizeF(m_gridWSpin->value(), value));
     m_props->setGridSize(QVector3D(m_gridWSpin->value(), m_props->gridSize().y(), value));
+}
+
+void Monitor::updateStageOverlay()
+{
+    if (m_graphicsView == NULL)
+        return;
+    StageGeometry *sg = StageGeometry::instance();
+    if (sg == NULL)
+        return;
+
+    // Reflect the Stage Geometry values in the setup fields (no signal loop).
+    if (m_stageWSpin != NULL)
+    {
+        m_stageWSpin->blockSignals(true);
+        m_stageHSpin->blockSignals(true);
+        m_stageOffXSpin->blockSignals(true);
+        m_stageOffYSpin->blockSignals(true);
+        m_stageHeightSpin->blockSignals(true);
+        m_roomHSpin->blockSignals(true);
+        m_stageWSpin->setValue(sg->stageWidth());
+        m_stageHSpin->setValue(sg->stageDepth());
+        m_stageOffXSpin->setValue(sg->stageOffsetX());
+        m_stageOffYSpin->setValue(sg->stageOffsetY());
+        m_stageHeightSpin->setValue(sg->stageHeight());
+        m_roomHSpin->setValue(sg->roomHeight());
+        m_stageWSpin->blockSignals(false);
+        m_stageHSpin->blockSignals(false);
+        m_stageOffXSpin->blockSignals(false);
+        m_stageOffYSpin->blockSignals(false);
+        m_stageHeightSpin->blockSignals(false);
+        m_roomHSpin->blockSignals(false);
+    }
+
+    m_graphicsView->setStage(sg->stageWidth(), sg->stageDepth(),
+                             sg->stageOffsetX(), sg->stageOffsetY());
+}
+
+void Monitor::slotStageGeometryChanged()
+{
+    StageGeometry *sg = StageGeometry::instance();
+    if (sg == NULL)
+        return;
+    sg->setStageSize(m_stageWSpin->value(), m_stageHSpin->value());
+    sg->setStageOffset(m_stageOffXSpin->value(), m_stageOffYSpin->value());
+    sg->setStageHeight(m_stageHeightSpin->value());
+    sg->setRoomHeight(m_roomHSpin->value());
+}
+
+QPointF Monitor::worldToMonitorMm(double x, double y) const
+{
+    StageGeometry *sg = StageGeometry::instance();
+    if (sg == NULL)
+        return QPointF(x * 1000.0, y * 1000.0);
+    StageGeom::Room r = sg->room();
+    // world y-up -> monitor y-down, both relative to the room origin.
+    return QPointF((x - r.minX()) * 1000.0, (r.maxY() - y) * 1000.0);
+}
+
+void Monitor::monitorMmToWorld(const QPointF &mm, double &x, double &y) const
+{
+    StageGeometry *sg = StageGeometry::instance();
+    if (sg == NULL)
+    {
+        x = mm.x() / 1000.0;
+        y = mm.y() / 1000.0;
+        return;
+    }
+    StageGeom::Room r = sg->room();
+    x = mm.x() / 1000.0 + r.minX();
+    y = r.maxY() - mm.y() / 1000.0;
+}
+
+void Monitor::slotStageFixturePosition(quint32 id, double x, double y, double z)
+{
+    Q_UNUSED(z)
+    QPointF mm = worldToMonitorMm(x, y);
+    m_props->setFixturePosition(id, 0, 0, QVector3D(mm.x(), 0, mm.y()));
+    if (m_graphicsView != NULL)
+        m_graphicsView->setFixturePosition(id, mm);
 }
 
 void Monitor::slotGridUnitsChanged(int index)
@@ -786,6 +943,15 @@ void Monitor::slotFixtureMoved(quint32 fid, QPointF pos)
     showFixtureItemEditor();
     m_props->setFixturePosition(fid, 0, 0, QVector3D(pos.x(), pos.y(), 0));
     m_doc->setModified();
+
+    // Keep the Stage Geometry calibrated position in sync.
+    StageGeometry *sg = StageGeometry::instance();
+    if (sg != NULL)
+    {
+        double wx = 0, wy = 0;
+        monitorMmToWorld(pos, wx, wy);
+        sg->setFixturePosition(fid, wx, wy);
+    }
 }
 
 void Monitor::slotViewClicked()

@@ -1,7 +1,7 @@
 %define version %(echo $QLCPLUS_VERSION)
 #define ui qmlui
 
-Summary: Q Light Controller Plus - The free DMX lighting console
+Summary: Q Light Controller ++ - The free DMX lighting console
 License: Apache License, Version 2.0
 Name: qlcplus
 Version: %{version}

@@ -30,7 +30,7 @@ Section: misc
 Architecture: all
 Depends:
  ${misc:Depends},
-Description: Q Light Controller Plus - architecture independent data
+Description: Q Light Controller ++ - architecture independent data
  Software lighting desk for controlling professional lighting fixtures.
  .
  This package contains the fixture definitions, gobos, input profiles, MIDI
@@ -49,7 +49,7 @@ Recommends:
  gstreamer1.0-plugins-good,
  gstreamer1.0-plugins-base,
  gstreamer1.0-libav,
-Description: Q Light Controller Plus - The open DMX lighting desk
+Description: Q Light Controller ++ - The open DMX lighting desk
  Software lighting desk for controlling professional lighting fixtures.
 
 Package: qlcplus-dbg
@@ -59,8 +59,8 @@ Priority: extra
 Depends:
  qlcplus (= ${binary:Version}),
  ${misc:Depends},
-Description: Debugging symbols for Q Light Controller Plus
- Q Light Controller Plus debugging symbols.
+Description: Debugging symbols for Q Light Controller ++
+ Q Light Controller ++ debugging symbols.
 
 Package: qlcplus5
 Section: misc
@@ -81,7 +81,7 @@ Recommends:
  gstreamer1.0-plugins-good,
  gstreamer1.0-plugins-base,
  gstreamer1.0-libav,
-Description: Q Light Controller Plus 5 - The open DMX lighting desk
+Description: Q Light Controller ++ 5 - The open DMX lighting desk
  Software lighting desk for controlling professional lighting fixtures.
  .
  This is the QLC+ 5 QML user interface, which can be installed alongside
@@ -94,5 +94,5 @@ Priority: extra
 Depends:
  qlcplus5 (= ${binary:Version}),
  ${misc:Depends},
-Description: Debugging symbols for Q Light Controller Plus 5
- Q Light Controller Plus 5 debugging symbols.
+Description: Debugging symbols for Q Light Controller ++ 5
+ Q Light Controller ++ 5 debugging symbols.

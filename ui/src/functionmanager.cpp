@@ -52,7 +52,9 @@
 #include "showeditor.h"
 #include "collection.h"
 #include "efxeditor.h"
+#include "pathfunctioneditor.h"
 #include "rgbmatrix.h"
+#include "pathfunction.h"
 #include "function.h"
 #include "sequence.h"
 #include "chaser.h"
@@ -90,6 +92,7 @@ FunctionManager::FunctionManager(QWidget* parent, Doc* doc)
     , m_addScriptAction(NULL)
     , m_addAudioAction(NULL)
     , m_addVideoAction(NULL)
+    , m_addPathAction(NULL)
     , m_autostartAction(NULL)
     , m_wizardAction(NULL)
     , m_addFolderAction(NULL)
@@ -251,6 +254,11 @@ void FunctionManager::initActions()
     connect(m_addVideoAction, SIGNAL(triggered(bool)),
             this, SLOT(slotAddVideo()));
 
+    m_addPathAction = new QAction(QIcon(":/efx.png"),
+                                  tr("New &Path"), this);
+    connect(m_addPathAction, SIGNAL(triggered(bool)),
+            this, SLOT(slotAddPath()));
+
     m_addFolderAction = new QAction(QIcon(":/folder.png"),
                                    tr("New fo&lder"), this);
     m_addFolderAction->setShortcut(QKeySequence("CTRL+L"));
@@ -304,6 +312,7 @@ void FunctionManager::initToolbar()
     m_toolbar->addAction(m_addScriptAction);
     m_toolbar->addAction(m_addAudioAction);
     m_toolbar->addAction(m_addVideoAction);
+    m_toolbar->addAction(m_addPathAction);
     m_toolbar->addSeparator();
     m_toolbar->addAction(m_addFolderAction);
     m_toolbar->addSeparator();
@@ -399,6 +408,19 @@ void FunctionManager::slotAddRGBMatrix()
         QTreeWidgetItem* item = m_tree->functionItem(f);
         Q_ASSERT(item != NULL);
         f->setName(QString("%1 %2").arg(tr("New RGB Matrix")).arg(f->id()));
+        m_tree->scrollToItem(item);
+        m_tree->setCurrentItem(item);
+    }
+}
+
+void FunctionManager::slotAddPath()
+{
+    Function* f = new PathFunction(m_doc);
+    if (m_doc->addFunction(f) == true)
+    {
+        QTreeWidgetItem* item = m_tree->functionItem(f);
+        Q_ASSERT(item != NULL);
+        f->setName(QString("%1 %2").arg(tr("New Path")).arg(f->id()));
         m_tree->scrollToItem(item);
         m_tree->setCurrentItem(item);
     }
@@ -824,6 +846,7 @@ void FunctionManager::slotTreeContextMenuRequested()
     menu.addAction(m_addScriptAction);
     menu.addAction(m_addAudioAction);
     menu.addAction(m_addVideoAction);
+    menu.addAction(m_addPathAction);
     menu.addSeparator();
     menu.addAction(m_addFolderAction);
     menu.addSeparator();
@@ -951,6 +974,10 @@ void FunctionManager::editFunction(Function* function)
     else if (function->type() == Function::VideoType)
     {
         m_editor = new VideoEditor(m_hsplitter->widget(1), qobject_cast<Video*> (function), m_doc);
+    }
+    else if (function->type() == Function::PathType)
+    {
+        m_editor = new PathFunctionEditor(m_hsplitter->widget(1), qobject_cast<PathFunction*> (function), m_doc);
     }
     else
     {

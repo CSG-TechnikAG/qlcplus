@@ -607,7 +607,7 @@ void ShowManager::slotAddItem()
     fs.setDisabledFunctions(disabledList);
 
     fs.setMultiSelection(false);
-    fs.setFilter(Function::SceneType | Function::ChaserType | Function::SequenceType | Function::AudioType | Function::RGBMatrixType | Function::EFXType);
+    fs.setFilter(Function::SceneType | Function::ChaserType | Function::SequenceType | Function::AudioType | Function::RGBMatrixType | Function::EFXType | Function::PathType);
     fs.disableFilters(Function::ShowType | Function::ScriptType | Function::CollectionType);
     fs.showNewTrack(true);
 

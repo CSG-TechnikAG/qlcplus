@@ -119,7 +119,8 @@ public:
         ShowType       = 1 << 6,
         SequenceType   = 1 << 7,
         AudioType      = 1 << 8,
-        VideoType      = 1 << 9
+        VideoType      = 1 << 9,
+        PathType       = 1 << 10
     };
     Q_ENUM(Type)
 

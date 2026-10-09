@@ -20,6 +20,7 @@ add_library(${module_name} SHARED
     dmxsource.h
     doc.cpp doc.h
     efx.cpp efx.h
+    pathfunction.cpp pathfunction.h
     efxfixture.cpp efxfixture.h
     fadechannel.cpp fadechannel.h
     fixture.cpp fixture.h

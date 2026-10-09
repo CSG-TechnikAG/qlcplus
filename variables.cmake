@@ -10,7 +10,7 @@ set(CMAKE_AUTORCC ON)
 
 add_definitions(-DUNICODE)
 
-set(APPNAME "Q Light Controller Plus")
+set(APPNAME "Q Light Controller ++")
 set(FXEDNAME "Fixture Definition Editor")
 
 if(ANDROID OR IOS)
@@ -50,7 +50,7 @@ if(qmlui)
     set(APPBINARY "qlcplus5")
     set(PLUGINSUBDIR "qlcplus5")
 else()
-    set(APPVERSION "4.14.5")
+    set(APPVERSION "4.15")
     set(APPBINARY "qlcplus")
     set(PLUGINSUBDIR "qlcplus")
 endif()

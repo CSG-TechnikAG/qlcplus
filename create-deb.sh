@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# This script creates Q Light Controller Plus debian packages and strips GIT
+# This script creates Q Light Controller ++ debian packages and strips GIT
 # folders from the source package.
 #
 # QLC+ 4 and QLC+ 5 have different upstream versions, and debian derives the

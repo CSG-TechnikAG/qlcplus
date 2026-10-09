@@ -56,6 +56,7 @@
 #include "vclabel.h"
 #include "vcxypad.h"
 #include "vcclock.h"
+#include "vcstagemap.h"
 #include "functionwizard.h"
 #include "doc.h"
 
@@ -97,6 +98,7 @@ VirtualConsole::VirtualConsole(QWidget* parent, Doc* doc)
     , m_addAudioTriggersAction(NULL)
     , m_addClockAction(NULL)
     , m_addAnimationAction(NULL)
+    , m_addStageMapAction(NULL)
 
     , m_toolsSettingsAction(NULL)
     , m_functionWizardAction(NULL)
@@ -342,6 +344,9 @@ void VirtualConsole::initActions()
     m_addAnimationAction = new QAction(QIcon(":/animation.png"), tr("New Animation"), this);
     connect(m_addAnimationAction, SIGNAL(triggered(bool)), this, SLOT(slotAddAnimation()), Qt::QueuedConnection);
 
+    m_addStageMapAction = new QAction(QIcon(":/beam.png"), tr("New Stage Map"), this);
+    connect(m_addStageMapAction, SIGNAL(triggered(bool)), this, SLOT(slotAddStageMap()), Qt::QueuedConnection);
+
     /* Put add actions under the same group */
     m_addActionGroup = new QActionGroup(this);
     m_addActionGroup->setExclusive(false);
@@ -359,6 +364,7 @@ void VirtualConsole::initActions()
     m_addActionGroup->addAction(m_addAudioTriggersAction);
     m_addActionGroup->addAction(m_addClockAction);
     m_addActionGroup->addAction(m_addAnimationAction);
+    m_addActionGroup->addAction(m_addStageMapAction);
 
     /* Tools menu actions */
     m_toolsSettingsAction = new QAction(QIcon(":/configure.png"), tr("Virtual Console Settings"), this);
@@ -490,6 +496,7 @@ void VirtualConsole::initMenuBar()
     m_addMenu->addAction(m_addXYPadAction);
     m_addMenu->addAction(m_addCueListAction);
     m_addMenu->addAction(m_addAnimationAction);
+    m_addMenu->addAction(m_addStageMapAction);
     m_addMenu->addAction(m_addAudioTriggersAction);
     m_addMenu->addSeparator();
     m_addMenu->addAction(m_addFrameAction);
@@ -565,6 +572,7 @@ void VirtualConsole::initMenuBar()
     m_toolbar->addAction(m_addXYPadAction);
     m_toolbar->addAction(m_addCueListAction);
     m_toolbar->addAction(m_addAnimationAction);
+    m_toolbar->addAction(m_addStageMapAction);
     m_toolbar->addAction(m_addFrameAction);
     m_toolbar->addAction(m_addSoloFrameAction);
     m_toolbar->addAction(m_addLabelAction);
@@ -993,6 +1001,17 @@ void VirtualConsole::slotAddAnimation()
 
     VCMatrix* matrix = new VCMatrix(parent, m_doc);
     setupWidget(matrix, parent);
+    m_doc->setModified();
+}
+
+void VirtualConsole::slotAddStageMap()
+{
+    VCWidget* parent(closestParent());
+    if (parent == NULL)
+        return;
+
+    VCStageMap* map = new VCStageMap(parent, m_doc);
+    setupWidget(map, parent);
     m_doc->setModified();
 }
 

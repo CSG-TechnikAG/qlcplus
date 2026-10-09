@@ -2,8 +2,8 @@
         needs="x11"\
         section="Apps/Lighting"\
         hints="QT,QLC+"\
-        title="Q Light Controller Plus"\
-        longtitle="Q Light Controller Plus"\
+        title="Q Light Controller ++"\
+        longtitle="Q Light Controller ++"\
         icon="/usr/share/pixmaps/qlcplus.png"\
         command="/usr/bin/qlcplus"
 
