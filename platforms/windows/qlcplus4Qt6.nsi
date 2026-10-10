@@ -15,7 +15,7 @@
 ;--------------------------------
 ;General
 Name "Q Light Controller ++"
-OutFile "QLC+_4.15.exe"
+OutFile "QLC+_4.16.exe"
 InstallDir C:\QLC+
 InstallDirRegKey HKCU "Software\qlcplus" "Install_Dir"
 RequestExecutionLevel user
