@@ -216,6 +216,9 @@ protected slots:
     /** A calibrated lamp moved in the Stage Geometry: place it in the view */
     void slotStageFixturePosition(quint32 id, double x, double y, double z);
 
+    /** A fixture's monitor item changed elsewhere (e.g. the 3D Preview). */
+    void slotFixtureItemChanged(quint32 id);
+
 private:
     /** Convert Stage Geometry world (metres, y-up) to Monitor mm (y-down). */
     QPointF worldToMonitorMm(double x, double y) const;

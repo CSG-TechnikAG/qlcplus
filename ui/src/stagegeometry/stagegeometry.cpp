@@ -709,6 +709,14 @@ void StageGeometry::onGeometryChanged()
     emit stageChanged();
 }
 
+void StageGeometry::notifyRoomChanged()
+{
+    // The room footprint is derived from the Fixture Monitor grid, which has no
+    // signal of its own. Re-emit the geometry change so consumers (the 3D
+    // Preview, the Monitor overlay) pick up the new room size.
+    emit stageChanged();
+}
+
 void StageGeometry::onUniverseWritten(quint32 idx, const QByteArray &ua)
 {
     Q_UNUSED(ua)

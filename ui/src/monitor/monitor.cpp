@@ -88,6 +88,9 @@ Monitor::Monitor(QWidget* parent, Doc* doc, Qt::WindowFlags f)
 
     m_props = m_doc->monitorProperties();
 
+    connect(m_props, &MonitorProperties::fixtureItemChanged,
+            this, &Monitor::slotFixtureItemChanged);
+
     /* Master layout for toolbar and scroll area */
     new QVBoxLayout(this);
 
@@ -769,6 +772,9 @@ void Monitor::slotGridWidthChanged(double value)
 
     m_graphicsView->setGridSize(QSizeF(value, m_gridHSpin->value()));
     m_props->setGridSize(QVector3D(value, m_props->gridSize().y(), m_gridHSpin->value()));
+
+    if (StageGeometry::instance() != NULL)
+        StageGeometry::instance()->notifyRoomChanged();
 }
 
 void Monitor::slotGridHeightChanged(double value)
@@ -777,6 +783,9 @@ void Monitor::slotGridHeightChanged(double value)
 
     m_graphicsView->setGridSize(QSizeF(m_gridWSpin->value(), value));
     m_props->setGridSize(QVector3D(m_gridWSpin->value(), m_props->gridSize().y(), value));
+
+    if (StageGeometry::instance() != NULL)
+        StageGeometry::instance()->notifyRoomChanged();
 }
 
 void Monitor::updateStageOverlay()
@@ -858,6 +867,25 @@ void Monitor::slotStageFixturePosition(quint32 id, double x, double y, double z)
         m_graphicsView->setFixturePosition(id, mm);
 }
 
+void Monitor::slotFixtureItemChanged(quint32 id)
+{
+    if (m_graphicsView == NULL)
+        return;
+
+    if (m_props->containsFixture(id))
+    {
+        const PreviewItem item = m_props->fixtureItem(id, 0, 0);
+        m_graphicsView->setFixturePosition(id, QPointF(item.m_position.x(), item.m_position.y()));
+        m_graphicsView->setFixtureRotation(id, item.m_rotation.y());
+    }
+    else if (m_graphicsView->fixturesID().contains(id))
+    {
+        // Only drop the item if it is still there (avoids re-entering while the
+        // graphics view is already removing it).
+        m_graphicsView->removeFixture(id);
+    }
+}
+
 void Monitor::slotGridUnitsChanged(int index)
 {
     Q_ASSERT(m_graphicsView != NULL);
@@ -874,6 +902,9 @@ void Monitor::slotGridUnitsChanged(int index)
         m_graphicsView->setGridMetrics(304.8);
 
     m_props->setGridUnits(units);
+
+    if (StageGeometry::instance() != NULL)
+        StageGeometry::instance()->notifyRoomChanged();
 }
 
 void Monitor::slotAddFixture()

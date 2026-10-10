@@ -94,7 +94,7 @@ PathFunction::~PathFunction()
 
 QIcon PathFunction::getIcon() const
 {
-    return QIcon(":/efx.png");
+    return QIcon(":/path.png");
 }
 
 /*********************************************************************

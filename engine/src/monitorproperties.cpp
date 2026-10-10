@@ -178,7 +178,10 @@ void MonitorProperties::setPointOfView(MonitorProperties::PointOfView pov)
 void MonitorProperties::removeFixture(quint32 fid)
 {
     if (m_fixtureItems.contains(fid))
+    {
         m_fixtureItems.take(fid);
+        emit fixtureItemChanged(fid);
+    }
 }
 
 void MonitorProperties::removeFixture(quint32 fid, quint16 head, quint16 linked)
@@ -237,6 +240,7 @@ void MonitorProperties::setFixturePosition(quint32 fid, quint16 head, quint16 li
         quint32 subID = fixtureSubID(head, linked);
         m_fixtureItems[fid].m_subItems[subID].m_position = pos;
     }
+    emit fixtureItemChanged(fid);
 }
 
 QVector3D MonitorProperties::fixturePosition(quint32 fid, quint16 head, quint16 linked) const
@@ -263,6 +267,7 @@ void MonitorProperties::setFixtureRotation(quint32 fid, quint16 head, quint16 li
         quint32 subID = fixtureSubID(head, linked);
         m_fixtureItems[fid].m_subItems[subID].m_rotation = degrees;
     }
+    emit fixtureItemChanged(fid);
 }
 
 QVector3D MonitorProperties::fixtureRotation(quint32 fid, quint16 head, quint16 linked) const

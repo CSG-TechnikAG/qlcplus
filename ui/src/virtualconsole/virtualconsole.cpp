@@ -344,7 +344,7 @@ void VirtualConsole::initActions()
     m_addAnimationAction = new QAction(QIcon(":/animation.png"), tr("New Animation"), this);
     connect(m_addAnimationAction, SIGNAL(triggered(bool)), this, SLOT(slotAddAnimation()), Qt::QueuedConnection);
 
-    m_addStageMapAction = new QAction(QIcon(":/beam.png"), tr("New Stage Map"), this);
+    m_addStageMapAction = new QAction(QIcon(":/stagemap.png"), tr("New Stage Map"), this);
     connect(m_addStageMapAction, SIGNAL(triggered(bool)), this, SLOT(slotAddStageMap()), Qt::QueuedConnection);
 
     /* Put add actions under the same group */

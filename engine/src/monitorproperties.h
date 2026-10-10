@@ -94,6 +94,10 @@ public:
     /** Reset all the Monitor properties */
     void reset();
 
+signals:
+    /** Emitted when a fixture's monitor item changes (position/rotation/colour). */
+    void fixtureItemChanged(quint32 fid);
+
 private:
     QFont m_font;
     DisplayMode m_displayMode;

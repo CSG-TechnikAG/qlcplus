@@ -254,7 +254,7 @@ void FunctionManager::initActions()
     connect(m_addVideoAction, SIGNAL(triggered(bool)),
             this, SLOT(slotAddVideo()));
 
-    m_addPathAction = new QAction(QIcon(":/efx.png"),
+    m_addPathAction = new QAction(QIcon(":/path.png"),
                                   tr("New &Path"), this);
     connect(m_addPathAction, SIGNAL(triggered(bool)),
             this, SLOT(slotAddPath()));

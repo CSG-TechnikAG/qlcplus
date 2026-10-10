@@ -253,6 +253,7 @@ void StageGeometryFixture::loadXML(QXmlStreamReader &root)
 
 StageGeometryEngine::StageGeometryEngine(Doc *doc)
     : m_doc(doc)
+    , m_clearing(false)
     , m_sx(4.0)
     , m_sy(3.0)
     , m_stageOffX(0.5)
@@ -272,6 +273,11 @@ StageGeometryEngine::StageGeometryEngine(Doc *doc)
         connect(m_doc, &Doc::fixtureAdded, this, &StageGeometryEngine::slotFixturesChanged);
         connect(m_doc, &Doc::fixtureRemoved, this, &StageGeometryEngine::slotFixturesChanged);
         connect(m_doc, &Doc::fixtureChanged, this, &StageGeometryEngine::slotFixturesChanged);
+        // While Doc is being cleared the fixture list is momentarily stale
+        // (fixtures are deleted before fixtureRemoved() is emitted), so don't
+        // touch it until the dust settles.
+        connect(m_doc, &Doc::clearing, this, [this]() { m_clearing = true; });
+        connect(m_doc, &Doc::cleared, this, [this]() { m_clearing = false; rebuildFixtures(); });
         connect(m_doc->inputOutputMap(), &InputOutputMap::inputValueChanged,
                 this, &StageGeometryEngine::slotInputValueChanged);
     }
@@ -473,6 +479,8 @@ int StageGeometryEngine::findChannel(Fixture *fixture, int preset, int finePrese
 
 void StageGeometryEngine::slotFixturesChanged()
 {
+    if (m_clearing)
+        return;
     rebuildFixtures();
 }
 

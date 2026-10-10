@@ -106,6 +106,10 @@ public:
     /** Start from scratch; clear everything */
     void clearContents();
 
+    /** Notify that the room footprint (the Fixture Monitor grid) changed, so
+     *  consumers such as the 3D Preview can refresh their view. */
+    void notifyRoomChanged();
+
     /*********************************************************************
      * Load & Save
      *********************************************************************/

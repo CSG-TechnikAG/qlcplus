@@ -107,6 +107,14 @@ add_library(${module_name}
     stagegeometry/stagegeometrymath.cpp stagegeometry/stagegeometrymath.h
     stagegeometry/stagegeometrysolver.cpp stagegeometry/stagegeometrysolver.h
     stagegeometry/stagegeometryview.cpp stagegeometry/stagegeometryview.h
+    preview3d/preview3d.cpp preview3d/preview3d.h
+    preview3d/preview3dview.cpp preview3d/preview3dview.h
+    preview3d/preview3draster.cpp preview3d/preview3draster.h
+    preview3d/truss.cpp preview3d/truss.h
+    preview3d/trussscene.cpp preview3d/trussscene.h
+    preview3d/trusspanel.cpp preview3d/trusspanel.h
+    preview3d/fixturescene.cpp preview3d/fixturescene.h
+    preview3d/fixturepanel.cpp preview3d/fixturepanel.h
     speeddial.cpp speeddial.h
     speeddialwidget.cpp speeddialwidget.h
     universeitemwidget.cpp universeitemwidget.h
@@ -163,6 +171,7 @@ target_include_directories(${module_name} PUBLIC
     monitor
     showmanager
     stagegeometry
+    preview3d
     virtualconsole
 )
 

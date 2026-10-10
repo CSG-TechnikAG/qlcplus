@@ -67,6 +67,7 @@
         <file alias="frame.png">../../resources/icons/png/frame.png</file>
         <file alias="frameraised.png">../../resources/icons/png/frameraised.png</file>
         <file alias="framesunken.png">../../resources/icons/png/framesunken.png</file>
+        <file alias="fittoroom.png">../../resources/icons/png/fittoroom.png</file>
         <file alias="fullscreen.png">../../resources/icons/png/fullscreen.png</file>
         <file alias="function.png">../../resources/icons/png/function.png</file>
         <file alias="global.png">../../resources/icons/png/global.png</file>
@@ -99,6 +100,10 @@
         <file alias="player_stop.png">../../resources/icons/png/player_stop.png</file>
         <file alias="prism.png">../../resources/icons/png/prism.png</file>
         <file alias="qlcplus.png">../../resources/icons/png/qlcplus.png</file>
+        <file alias="path.png">../../resources/icons/png/path.png</file>
+        <file alias="preview3d.png">../../resources/icons/png/preview3d.png</file>
+        <file alias="stagegeometry.png">../../resources/icons/png/stagegeometry.png</file>
+        <file alias="stagemap.png">../../resources/icons/png/stagemap.png</file>
         <file alias="qt.png">../../resources/icons/png/qt.png</file>
         <file alias="rainbow.png">../../resources/icons/png/rainbow.png</file>
         <file alias="random.png">../../resources/icons/png/random.png</file>
@@ -124,6 +129,7 @@
         <file alias="strobe.png">../../resources/icons/png/strobe.png</file>
         <file alias="tabview.png">../../resources/icons/png/tabview.png</file>
         <file alias="tilt.png">../../resources/icons/png/tilt.png</file>
+        <file alias="truss.png">../../resources/icons/png/truss.png</file>
         <file alias="uncheck.png">../../resources/icons/png/uncheck.png</file>
         <file alias="undo.png">../../resources/icons/png/undo.png</file>
         <file alias="ungroup.png">../../resources/icons/png/ungroup.png</file>

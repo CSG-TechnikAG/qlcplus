@@ -206,6 +206,7 @@ private:
     void updateFixtureInfo(StageGeometryFixture *f, Fixture *fx);
 
     Doc *m_doc;
+    bool m_clearing;
     mutable QMutex m_mutex;
     double m_sx;
     double m_sy;

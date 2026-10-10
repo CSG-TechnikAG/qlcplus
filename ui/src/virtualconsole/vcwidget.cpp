@@ -173,7 +173,7 @@ QIcon VCWidget::typeToIcon(int type)
         case AudioTriggersWidget: return QIcon(":/audioinput.png");
         case AnimationWidget: return QIcon(":/rgbmatrix.png");
         case ClockWidget: return QIcon(":/clock.png");
-        case StageMapWidget: return QIcon(":/beam.png");
+        case StageMapWidget: return QIcon(":/stagemap.png");
         case UnknownWidget:
         default:
              return QIcon(":/virtualconsole.png");

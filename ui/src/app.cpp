@@ -41,6 +41,7 @@
 #include "addresstool.h"
 #include "simpledesk.h"
 #include "stagegeometry.h"
+#include "preview3d.h"
 #include "aboutbox.h"
 #include "monitor.h"
 #include "vcframe.h"
@@ -298,7 +299,9 @@ void App::init()
     w = new SimpleDesk(m_tab, m_doc);
     m_tab->addTab(w, QIcon(":/slidermatrix.png"), tr("Simple Desk"));
     w = new StageGeometry(m_tab, m_doc);
-    m_tab->addTab(w, QIcon(":/beam.png"), tr("Stage Geometry"));
+    m_tab->addTab(w, QIcon(":/stagegeometry.png"), tr("Stage Geometry"));
+    w = new Preview3D(m_tab, m_doc);
+    m_tab->addTab(w, QIcon(":/preview3d.png"), tr("3D Preview"));
     w = new InputOutputManager(m_tab, m_doc);
     m_tab->addTab(w, QIcon(":/input_output.png"), tr("Inputs/Outputs"));
 
@@ -488,6 +491,8 @@ void App::clearDocument()
     SimpleDesk::instance()->clearContents();
     if (StageGeometry::instance() != NULL)
         StageGeometry::instance()->clearContents();
+    if (Preview3D::instance() != NULL)
+        Preview3D::instance()->clearContents();
     m_doc->inputOutputMap()->resetUniverses();
     setFileName(QString());
     m_doc->resetModified();
@@ -1465,6 +1470,11 @@ bool App::loadXML(QXmlStreamReader& doc, bool goToConsole, bool fromMemory)
             if (StageGeometry::instance() != NULL)
                 StageGeometry::instance()->loadXML(doc);
         }
+        else if (doc.name() == KXMLQLCPreview3D)
+        {
+            if (Preview3D::instance() != NULL)
+                Preview3D::instance()->loadXML(doc);
+        }
         else if (doc.name() == KXMLFixture)
         {
             /* Legacy support code, nowadays in Doc */
@@ -1558,6 +1568,10 @@ QFile::FileError App::saveXML(const QString& fileName, bool autosave)
     /* Write Stage Geometry to the XML document */
     if (StageGeometry::instance() != NULL)
         StageGeometry::instance()->saveXML(&doc);
+
+    /* Write the 3D Preview (trusses, links, camera) to the XML document */
+    if (Preview3D::instance() != NULL)
+        Preview3D::instance()->saveXML(&doc);
 
     doc.writeEndElement(); // close KXMLQLCWorkspace
 
