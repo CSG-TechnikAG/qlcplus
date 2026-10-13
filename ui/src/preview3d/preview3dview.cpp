@@ -113,6 +113,7 @@ Preview3DView::Preview3DView(QWidget *parent)
     , m_hasFitted(false)
     , m_userMoved(false)
     , m_showGrid(true)
+    , m_beamPreview(false)
     , m_dragMode(DragNone)
     , m_scene(NULL)
     , m_trussInteractive(false)
@@ -133,8 +134,8 @@ Preview3DView::Preview3DView(QWidget *parent)
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     setFocusPolicy(Qt::StrongFocus);
 
-    m_bgTop = QColor(28, 36, 48);
-    m_bgBottom = QColor(11, 15, 21);
+    m_bgTop = QColor(0, 0, 0);
+    m_bgBottom = QColor(0, 0, 0);
 
     m_floorFill = QColor(34, 43, 54);
     m_floorGrid = QColor(60, 78, 97, 190);
@@ -224,6 +225,12 @@ void Preview3DView::resetView()
 void Preview3DView::setGridVisible(bool on)
 {
     m_showGrid = on;
+    update();
+}
+
+void Preview3DView::setBeamPreview(bool on)
+{
+    m_beamPreview = on;
     update();
 }
 
@@ -849,12 +856,182 @@ void Preview3DView::rasterDome(SoftwareRaster &r, const QVector3D &base, const Q
     }
 }
 
+Preview3DView::BeamHit Preview3DView::beamHit(const QVector3D &origin, const QVector3D &dir) const
+{
+    BeamHit hit;
+
+    // Slab test against the room box: find where the ray leaves it.
+    double tmax = 1e9;
+    int axis = 2;
+    const double o[3] = { origin.x(), origin.y(), origin.z() };
+    const double d[3] = { dir.x(), dir.y(), dir.z() };
+    const double lo[3] = { m_rx0, m_ry0, m_zFloor };
+    const double hi[3] = { m_rx1, m_ry1, m_zTop };
+    for (int i = 0; i < 3; ++i)
+    {
+        if (qAbs(d[i]) < 1e-9)
+        {
+            if (o[i] < lo[i] || o[i] > hi[i])
+            {
+                hit.t = 0.05;
+                hit.point = origin + dir * 0.05;
+                hit.normal = QVector3D(i == 0 ? 1.0 : 0.0, i == 1 ? 1.0 : 0.0, i == 2 ? 1.0 : 0.0);
+                return hit;
+            }
+            continue;
+        }
+        double t1 = (lo[i] - o[i]) / d[i];
+        double t2 = (hi[i] - o[i]) / d[i];
+        if (t1 > t2)
+            qSwap(t1, t2);
+        if (t2 < tmax)
+        {
+            tmax = t2;
+            axis = i;
+        }
+    }
+    if (tmax < 0.05)
+        tmax = 0.05;
+
+    hit.t = tmax;
+    hit.point = origin + dir * tmax;
+    hit.normal = QVector3D(axis == 0 ? 1.0 : 0.0, axis == 1 ? 1.0 : 0.0, axis == 2 ? 1.0 : 0.0);
+
+    // A downward beam stops on the stage deck (z = 0, inside the footprint) or
+    // on the room floor, whichever comes first.
+    if (dir.z() < -1e-6)
+    {
+        if (origin.z() > 0.0)
+        {
+            const double t = (0.0 - origin.z()) / dir.z();
+            if (t > 0.05 && t < hit.t)
+            {
+                const QVector3D p = origin + dir * t;
+                if (p.x() >= 0.0 && p.x() <= m_stageX && p.y() >= 0.0 && p.y() <= m_stageY)
+                {
+                    hit.t = t;
+                    hit.point = p;
+                    hit.normal = QVector3D(0.0, 0.0, 1.0);
+                }
+            }
+        }
+        if (origin.z() > m_zFloor)
+        {
+            const double t = (m_zFloor - origin.z()) / dir.z();
+            if (t > 0.05 && t < hit.t)
+            {
+                hit.t = t;
+                hit.point = origin + dir * t;
+                hit.normal = QVector3D(0.0, 0.0, 1.0);
+            }
+        }
+    }
+
+    return hit;
+}
+
+double Preview3DView::beamLength(const QVector3D &origin, const QVector3D &dir) const
+{
+    return qMax(0.05, beamHit(origin, dir).t);
+}
+
+namespace
+{
+/** Ray vs axis-aligned box; t is the entry (outside) or exit (inside). */
+bool rayBoxT(const QVector3D &o, const QVector3D &d,
+             const QVector3D &lo, const QVector3D &hi, double &t)
+{
+    double tmin = -1e9, tmax = 1e9;
+    const double ov[3] = { o.x(), o.y(), o.z() };
+    const double dv[3] = { d.x(), d.y(), d.z() };
+    const double lov[3] = { lo.x(), lo.y(), lo.z() };
+    const double hiv[3] = { hi.x(), hi.y(), hi.z() };
+    for (int i = 0; i < 3; ++i)
+    {
+        if (qAbs(dv[i]) < 1e-9)
+        {
+            if (ov[i] < lov[i] || ov[i] > hiv[i])
+                return false;
+            continue;
+        }
+        double t1 = (lov[i] - ov[i]) / dv[i];
+        double t2 = (hiv[i] - ov[i]) / dv[i];
+        if (t1 > t2)
+            qSwap(t1, t2);
+        tmin = qMax(tmin, t1);
+        tmax = qMin(tmax, t2);
+    }
+    if (tmax < tmin || tmax < 0.0)
+        return false;
+    t = (tmin > 0.0) ? tmin : tmax;
+    return t > 0.0;
+}
+
+/** Ray vs a capsule (segment a-b with `radius`), closest-approach test. */
+bool rayCapsule(const QVector3D &o, const QVector3D &d,
+                const QVector3D &a, const QVector3D &b, double radius, double &t)
+{
+    const QVector3D ab = b - a;
+    const double C = QVector3D::dotProduct(ab, ab);
+    if (C < 1e-9)
+        return false;
+    const QVector3D w0 = o - a;
+    const double D = QVector3D::dotProduct(d, ab);
+    const double W = QVector3D::dotProduct(d, w0);
+    const double E = QVector3D::dotProduct(ab, w0);
+    const double denom = C - D * D;
+    double s = (denom > 1e-9) ? (E - W * D) / denom : 0.0;
+    s = qBound(0.0, s, 1.0);
+    double tc = s * D - W;
+    if (tc < 0.0)
+        tc = 0.0;
+    const QVector3D p = o + d * tc;
+    const QVector3D q = a + ab * s;
+    if ((p - q).lengthSquared() > radius * radius)
+        return false;
+    t = tc;
+    return t > 0.05;
+}
+} // namespace
+
+double Preview3DView::beamRay(const QVector3D &origin, const QVector3D &dir) const
+{
+    double t = 1e9;
+    double tb;
+
+    // Room box (the origin is inside, so this is the exit through a wall/floor).
+    if (rayBoxT(origin, dir, QVector3D(m_rx0, m_ry0, m_zFloor),
+                QVector3D(m_rx1, m_ry1, m_zTop), tb))
+        t = qMin(t, tb);
+
+    // Stage deck as a solid box (occludes beams that pass under/beside it).
+    if (m_stageX > 0.0 && m_stageY > 0.0)
+    {
+        const double riser = qMax(0.0, -m_zFloor);
+        const double deckT = qMin(kDeckThickness, riser);
+        if (rayBoxT(origin, dir, QVector3D(0.0, 0.0, -deckT),
+                    QVector3D(m_stageX, m_stageY, 0.0), tb))
+            t = qMin(t, tb);
+    }
+
+    // Truss shadows.
+    for (const Occluder &oc : m_occluders)
+    {
+        if (rayCapsule(origin, dir, oc.a, oc.b, oc.radius, tb))
+            t = qMin(t, tb);
+    }
+
+    return qMax(0.05, t);
+}
+
 void Preview3DView::rasterFixtureBeam(SoftwareRaster &r, const QVector3D &origin,
                                       const QQuaternion &rot, double beamDeg,
                                       const QColor &color, double length, int alpha) const
 {
     const QVector3D dir = rot.rotatedVector(QVector3D(0.0, 1.0, 0.0));
-    const double radius = qTan(qDegreesToRadians(beamDeg * 0.5)) * length;
+    const bool autoLen = (length <= 0.0);
+
+    const double tanHalf = qTan(qDegreesToRadians(beamDeg * 0.5));
 
     QVector3D u = QVector3D::crossProduct(dir, QVector3D(0.0, 0.0, 1.0));
     if (u.lengthSquared() < 1e-6)
@@ -862,12 +1039,16 @@ void Preview3DView::rasterFixtureBeam(SoftwareRaster &r, const QVector3D &origin
     u.normalize();
     const QVector3D v = QVector3D::crossProduct(dir, u).normalized();
 
-    const int N = 10;
+    // Collide each cone edge independently, so only the parts of the beam that
+    // hit a surface stop there (stage edge, deck sides, walls, trusses).
+    const int N = 16;
     QList<QVector3D> base;
     for (int i = 0; i < N; ++i)
     {
         const double a = 2.0 * M_PI * i / N;
-        base << origin + dir * length + u * (qCos(a) * radius) + v * (qSin(a) * radius);
+        const QVector3D edge = (dir + u * (tanHalf * qCos(a)) + v * (tanHalf * qSin(a))).normalized();
+        const double t = autoLen ? beamRay(origin, edge) : length;
+        base << origin + edge * (t * 0.99);   // pull off the surface (anti z-fight)
     }
 
     QColor beamCol = color;
@@ -889,18 +1070,24 @@ void Preview3DView::rasterRectBeam(SoftwareRaster &r, const QVector3D &origin,
     const QVector3D dir = rot.rotatedVector(QVector3D(0.0, 1.0, 0.0));
     const QVector3D rx = rot.rotatedVector(QVector3D(1.0, 0.0, 0.0));
     const QVector3D rz = rot.rotatedVector(QVector3D(0.0, 0.0, 1.0));
-    const QVector3D c = origin + dir * length;
     const double ew = halfW + spread;
     const double eh = halfH + spread;
+    const double len = qMax(0.05, length);
+
+    // Collide each far corner independently.
+    auto far = [&](double sx, double sz) {
+        const QVector3D e = (dir + rx * (ew / len) * sx + rz * (eh / len) * sz).normalized();
+        return origin + e * (beamRay(origin, e) * 0.99);
+    };
 
     const QVector3D n0 = origin - rx * halfW - rz * halfH;
     const QVector3D n1 = origin + rx * halfW - rz * halfH;
     const QVector3D n2 = origin + rx * halfW + rz * halfH;
     const QVector3D n3 = origin - rx * halfW + rz * halfH;
-    const QVector3D f0 = c - rx * ew - rz * eh;
-    const QVector3D f1 = c + rx * ew - rz * eh;
-    const QVector3D f2 = c + rx * ew + rz * eh;
-    const QVector3D f3 = c - rx * ew + rz * eh;
+    const QVector3D f0 = far(-1.0, -1.0);
+    const QVector3D f1 = far( 1.0, -1.0);
+    const QVector3D f2 = far( 1.0,  1.0);
+    const QVector3D f3 = far(-1.0,  1.0);
 
     QColor col = color;
     col.setAlpha(alpha);
@@ -909,7 +1096,9 @@ void Preview3DView::rasterRectBeam(SoftwareRaster &r, const QVector3D &origin,
     rasterPolygon(r, { n1, n2, f2, f1 }, col, QColor(), 0.0);
     rasterPolygon(r, { n2, n3, f3, f2 }, col, QColor(), 0.0);
     rasterPolygon(r, { n3, n0, f0, f3 }, col, QColor(), 0.0);
-    rasterPolygon(r, { f0, f1, f2, f3 }, col, QColor(), 0.0);
+    QColor pool = color;
+    pool.setAlpha(qMin(255, alpha + 30));
+    rasterPolygon(r, { f0, f1, f2, f3 }, pool, QColor(), 0.0);
     r.setDepthWrite(true);
 }
 
@@ -959,7 +1148,6 @@ void Preview3DView::rasterFixtures(SoftwareRaster &r) const
         const bool lit = (!live) || (inten > 0.02);
         const QColor gel = sel ? m_selectColor : (live ? fi.liveColor : fi.color);
         const QColor lens = (lit || sel) ? gel : gel.darker(280);
-        const int beamAlpha = qBound(0, int(50.0 * inten), 50);
 
         const QQuaternion rot = QQuaternion::fromAxisAndAngle(QVector3D(0.0, 0.0, 1.0), fi.yaw)
                               * QQuaternion::fromAxisAndAngle(QVector3D(1.0, 0.0, 0.0), fi.pitch);
@@ -1030,10 +1218,6 @@ void Preview3DView::rasterFixtures(SoftwareRaster &r) const
             // Barn doors make it read as a conventional theatre lantern.
             rasterBarnDoors(r, front + rot.rotatedVector(QVector3D(0.0, 0.022, 0.0)), rot,
                             radius * 1.05, radius * 0.85, 0.95);
-
-            if (lit)
-                rasterFixtureBeam(r, front + rot.rotatedVector(QVector3D(0.0, 0.022, 0.0)),
-                                  rot, fi.beamDeg, gel, 3.0, beamAlpha);
             break;
         }
         case FixtureModel::Bar:
@@ -1072,31 +1256,6 @@ void Preview3DView::rasterFixtures(SoftwareRaster &r) const
                                rot, lr, pc, shellEdge.darker(130));
                 }
             }
-
-            // One bar-shaped beam per column, instead of a single massive
-            // round cone. Each column takes its live colour/brightness.
-            if (lit)
-            {
-                const double beamLen = 2.2;
-                const double spread = qTan(qDegreesToRadians(qBound(6.0, fi.beamDeg, 45.0) * 0.5)) * beamLen;
-                for (int cix = 0; cix < cols; ++cix)
-                {
-                    const double lx = -sx * 0.5 + dx * (cix + 0.5);
-                    QColor bc = gel;
-                    double bi = inten;
-                    if (live && !fi.liveHeads.isEmpty())
-                    {
-                        const int idx = cix % fi.liveHeads.size();
-                        bc = fi.liveHeads.at(idx);
-                        if (idx < fi.liveHeadIntensity.size())
-                            bi = fi.liveHeadIntensity.at(idx);
-                    }
-                    const int a = qBound(0, int(30.0 * bi), 30);
-                    if (a > 0)
-                        rasterRectBeam(r, fi.pos + rot.rotatedVector(QVector3D(lx, len * 0.5 + 0.006, 0.0)),
-                                       rot, dx * 0.45, sz * 0.5, beamLen, spread, bc, a);
-                }
-            }
             break;
         }
         case FixtureModel::Derby:
@@ -1116,25 +1275,6 @@ void Preview3DView::rasterFixtures(SoftwareRaster &r) const
             rasterCylinder(r, baseC, up, R, baseH, shell, shellEdge, 18);
             rasterDome(r, baseC + rot.rotatedVector(QVector3D(0.0, 0.0, baseH * 0.5)),
                        up, R * 0.95, domeH, 14, 3, shell.lighter(112), shellEdge);
-
-            // A fan of coloured beams radiating from the dome.
-            const QVector3D domeTop = baseC + rot.rotatedVector(QVector3D(0.0, 0.0, baseH * 0.5 + domeH * 0.8));
-            const int beams = 6;
-            const double tilt = 0.9;   // outward and downward from the vertical
-            const double ct = qCos(tilt);
-            const double st = qSin(tilt);
-            for (int i = 0; i < beams; ++i)
-            {
-                const double a = 2.0 * M_PI * i / beams;
-                const QVector3D localDir(qCos(a) * st, qSin(a) * st, -ct);
-                const QQuaternion dirRot = rot
-                    * QQuaternion::rotationTo(QVector3D(0.0, 1.0, 0.0), localDir.normalized());
-                const QColor beamCol = sel ? m_selectColor
-                                           : (live ? gel
-                                                   : QColor::fromHsv((i * 360 / beams + 20) % 360, 200, 255));
-                if (lit)
-                    rasterFixtureBeam(r, domeTop, dirRot, qBound(6.0, fi.beamDeg, 18.0), beamCol, 1.8, beamAlpha);
-            }
             break;
         }
         case FixtureModel::MovingHead:
@@ -1145,8 +1285,20 @@ void Preview3DView::rasterFixtures(SoftwareRaster &r) const
             const double bodyR = qMax(0.05, 0.32 * qMin(sx, sy));
             const double drumLen = qMax(bodyR * 1.5, sx * 0.8);
 
-            const double mhYaw = live ? fi.yaw + fi.livePan : fi.yaw;
-            const double mhPitch = live ? fi.pitch + fi.liveTilt : fi.pitch;
+            double mhYaw, mhPitch;
+            if (live && fi.liveDirValid)
+            {
+                // Orient the head so its beam points along the calibrated
+                // world direction.
+                const QVector3D d = fi.liveDir.normalized();
+                mhPitch = qRadiansToDegrees(qAsin(qBound(-1.0, double(d.z()), 1.0)));
+                mhYaw = qRadiansToDegrees(qAtan2(-double(d.x()), double(d.y())));
+            }
+            else
+            {
+                mhYaw = live ? fi.yaw + fi.livePan : fi.yaw;
+                mhPitch = live ? fi.pitch + fi.liveTilt : fi.pitch;
+            }
             const QQuaternion pan = QQuaternion::fromAxisAndAngle(QVector3D(0.0, 0.0, 1.0), mhYaw);
             const QQuaternion head = pan * QQuaternion::fromAxisAndAngle(QVector3D(1.0, 0.0, 0.0), mhPitch);
             // The drum axis lies along the tilt axis (local X).
@@ -1168,9 +1320,6 @@ void Preview3DView::rasterFixtures(SoftwareRaster &r) const
             const QVector3D front = fi.pos + head.rotatedVector(QVector3D(0.0, bodyR, 0.0));
             rasterDisk(r, front + head.rotatedVector(QVector3D(0.0, 0.012, 0.0)), head,
                        bodyR * 0.62, lens, shellEdge.darker(120));
-            if (lit)
-                rasterFixtureBeam(r, front + head.rotatedVector(QVector3D(0.0, 0.012, 0.0)),
-                                  head, fi.beamDeg, gel, 3.0, beamAlpha);
             break;
         }
         case FixtureModel::Smoke:
@@ -1210,16 +1359,6 @@ void Preview3DView::rasterFixtures(SoftwareRaster &r) const
             // Handle.
             rasterBox(r, fi.pos + rot.rotatedVector(QVector3D(sx * 0.18, 0.0, sz * 0.5 + 0.03)), rot,
                       QVector3D(sx * 0.5, 0.03, 0.03), metal, metal.darker(130));
-
-            // A faint plume so it reads as a fogger (not a light).
-            const QVector3D tip = nozzle + rot.rotatedVector(QVector3D(0.0, sy * 0.16, 0.0));
-            const double smokeInten = live ? inten : 0.6;
-            if (smokeInten > 0.02)
-            {
-                const double plumeLen = 0.8 + 1.6 * smokeInten;
-                const int plumeAlpha = qBound(6, int(22.0 * smokeInten) + 6, 40);
-                rasterFixtureBeam(r, tip, rot, 55.0, QColor(205, 210, 220), plumeLen, plumeAlpha);
-            }
             break;
         }
         default: // Par
@@ -1246,13 +1385,196 @@ void Preview3DView::rasterFixtures(SoftwareRaster &r) const
             rasterDisk(r, front + rot.rotatedVector(QVector3D(0.0, 0.02, 0.0)), rot,
                        radius * 0.82, lens, shellEdge.darker(120));
 
-            if (lit)
-                rasterFixtureBeam(r, front + rot.rotatedVector(QVector3D(0.0, 0.02, 0.0)),
-                                  rot, fi.beamDeg, gel, 3.0, beamAlpha);
             break;
         }
         }
     }
+
+    // --- Pass 2: additive light beams --------------------------------------
+    // Drawn after all opaque geometry so bodies occlude them, depth-tested but
+    // without depth writes so overlapping beams mix additively. Only shown in
+    // operate mode, or in design mode when "Beam preview" is enabled.
+    const bool liveMode = m_fixtureScene->isLive();
+    const bool showBeams = liveMode || m_beamPreview;
+
+    // Truss occluders (beam shadows), rebuilt each frame.
+    m_occluders.clear();
+    if (m_scene != NULL)
+    {
+        for (const Truss &t : m_scene->trusses())
+        {
+            if (!t.visible)
+                continue;
+            const QList<TrussSegment> segs = t.segments(m_scene->linkedPorts(t.id), true);
+            for (const TrussSegment &s : segs)
+                m_occluders << Occluder{ s.a, s.b, s.chord ? 0.030 : 0.018 };
+        }
+    }
+
+    r.setAdditive(true);
+    r.setDepthWrite(false);
+
+    for (const FixtureInstance &fi : m_fixtureScene->fixtures())
+    {
+        if (!fi.visible || !showBeams)
+            continue;
+
+        const bool sel = m_fixtureInteractive && ((int)fi.id == m_selectedFixture);
+        const bool live = fi.live;
+        const double inten = live ? fi.liveIntensity : 1.0;
+        const bool lit = (!live) || (inten > 0.02) || (fi.model == FixtureModel::Derby);
+        if (!lit)
+            continue;
+        const QColor gel = sel ? m_selectColor : (live ? fi.liveColor : fi.color);
+
+        const QQuaternion rot = QQuaternion::fromAxisAndAngle(QVector3D(0.0, 0.0, 1.0), fi.yaw)
+                              * QQuaternion::fromAxisAndAngle(QVector3D(1.0, 0.0, 0.0), fi.pitch);
+
+        switch (fi.model)
+        {
+        case FixtureModel::Lamp:
+        {
+            const double radius = qMax(0.05, 0.5 * qMax(fi.size.x(), fi.size.z()));
+            const double len = qMax(fi.size.y(), radius * 1.3);
+            const QVector3D front = fi.pos + rot.rotatedVector(QVector3D(0.0, len * 0.5 + 0.022, 0.0));
+            rasterFixtureBeam(r, front, rot, fi.beamDeg, gel, 0.0,
+                              qBound(0, int(80.0 * inten), 90));
+            break;
+        }
+        case FixtureModel::Bar:
+        {
+            const double sx = fi.size.x();
+            const double sz = fi.size.z();
+            const double len = qMax(fi.size.y(), sz);
+            const int cols = qMax(1, fi.ledCols);
+            const double dx = sx / cols;
+            const QVector3D dir = rot.rotatedVector(QVector3D(0.0, 1.0, 0.0));
+            for (int cix = 0; cix < cols; ++cix)
+            {
+                const double lx = -sx * 0.5 + dx * (cix + 0.5);
+                const QVector3D o = fi.pos + rot.rotatedVector(QVector3D(lx, len * 0.5 + 0.006, 0.0));
+                const double blen = beamLength(o, dir);
+                const double spread = qTan(qDegreesToRadians(qBound(6.0, fi.beamDeg, 45.0) * 0.5)) * blen;
+                QColor bc = gel;
+                double bi = inten;
+                if (live && !fi.liveHeads.isEmpty())
+                {
+                    const int idx = cix % fi.liveHeads.size();
+                    bc = fi.liveHeads.at(idx);
+                    if (idx < fi.liveHeadIntensity.size())
+                        bi = fi.liveHeadIntensity.at(idx);
+                }
+                const int a = qBound(0, int(55.0 * bi), 70);
+                if (a > 0)
+                    rasterRectBeam(r, o, rot, dx * 0.45, sz * 0.5, blen, spread, bc, a);
+            }
+            break;
+        }
+        case FixtureModel::Derby:
+        {
+            const double sz = fi.size.z();
+            const double baseH = qMax(0.03, sz * 0.35);
+            const double domeH = qMax(0.05, sz * 0.55);
+            const QVector3D baseC = fi.pos + rot.rotatedVector(QVector3D(0.0, 0.0, -sz * 0.35));
+            const QVector3D domeTop = baseC + rot.rotatedVector(QVector3D(0.0, 0.0, baseH * 0.5 + domeH * 0.8));
+            const int beams = 6;
+            const double tilt = 0.9;
+            const double ct = qCos(tilt);
+            const double st = qSin(tilt);
+            for (int i = 0; i < beams; ++i)
+            {
+                const double a = 2.0 * M_PI * i / beams;
+                const QVector3D localDir(qCos(a) * st, qSin(a) * st, -ct);
+                const QQuaternion dirRot = rot
+                    * QQuaternion::rotationTo(QVector3D(0.0, 1.0, 0.0), localDir.normalized());
+                const QColor beamCol = sel ? m_selectColor
+                                           : (live ? gel
+                                                   : QColor::fromHsv((i * 360 / beams + 20) % 360, 200, 255));
+                rasterFixtureBeam(r, domeTop, dirRot, qBound(6.0, fi.beamDeg, 18.0), beamCol, 0.0,
+                                  qBound(45, int(70.0 * inten), 80));
+            }
+            break;
+        }
+        case FixtureModel::MovingHead:
+        {
+            const double sx = fi.size.x();
+            const double sy = fi.size.y();
+            double mhYaw, mhPitch;
+            if (live && fi.liveDirValid)
+            {
+                const QVector3D d = fi.liveDir.normalized();
+                mhPitch = qRadiansToDegrees(qAsin(qBound(-1.0, double(d.z()), 1.0)));
+                mhYaw = qRadiansToDegrees(qAtan2(-double(d.x()), double(d.y())));
+            }
+            else
+            {
+                mhYaw = live ? fi.yaw + fi.livePan : fi.yaw;
+                mhPitch = live ? fi.pitch + fi.liveTilt : fi.pitch;
+            }
+            const QQuaternion pan = QQuaternion::fromAxisAndAngle(QVector3D(0.0, 0.0, 1.0), mhYaw);
+            const QQuaternion head = pan * QQuaternion::fromAxisAndAngle(QVector3D(1.0, 0.0, 0.0), mhPitch);
+            const double bodyR = qMax(0.05, 0.32 * qMin(sx, sy));
+            const QVector3D front = fi.pos + head.rotatedVector(QVector3D(0.0, bodyR + 0.012, 0.0));
+            rasterFixtureBeam(r, front, head, fi.beamDeg, gel, 0.0,
+                              qBound(0, int(80.0 * inten), 90));
+            break;
+        }
+        case FixtureModel::Dimmer:
+        case FixtureModel::Smoke:
+            break;   // no light beam
+        default: // Par
+        {
+            const double radius = qMax(0.05, 0.5 * qMax(fi.size.x(), fi.size.z()));
+            const double len = qMax(fi.size.y(), radius * 1.1);
+            const QVector3D front = fi.pos + rot.rotatedVector(QVector3D(0.0, len * 0.5 + 0.02, 0.0));
+            rasterFixtureBeam(r, front, rot, fi.beamDeg, gel, 0.0,
+                              qBound(0, int(80.0 * inten), 90));
+            break;
+        }
+        }
+    }
+
+    r.setDepthWrite(true);
+    r.setAdditive(false);
+
+    // --- Pass 3: volumetric smoke (alpha blended, back to front) -----------
+    struct Puff
+    {
+        QPointF sp;
+        double iw;
+        double radius;
+        QColor color;
+        double depth;
+    };
+    QList<Puff> puffs;
+    const double focal = (height() * 0.5) / qTan(m_fovY * 0.5);
+    for (const FixtureInstance &fi : m_fixtureScene->fixtures())
+    {
+        if (!liveMode || fi.model != FixtureModel::Smoke || !fi.visible)
+            continue;
+        for (const FixtureScene::SmokeParticle &p : m_fixtureScene->smokeParticles(fi.id))
+        {
+            if (p.alpha <= 0.003)
+                continue;
+            const QVector3D cam = toCamera(p.pos);
+            if (cam.z() < m_near)
+                continue;
+            Puff pf;
+            pf.sp = projectCamera(cam);
+            pf.iw = 1.0 / cam.z();
+            pf.radius = qMin(80.0, p.size * focal / cam.z());
+            pf.color = QColor(206, 211, 221);
+            pf.color.setAlpha(qBound(0, int(p.alpha * 255.0), 255));
+            pf.depth = cam.z();
+            puffs << pf;
+        }
+    }
+    std::sort(puffs.begin(), puffs.end(),
+              [](const Puff &a, const Puff &b) { return a.depth > b.depth; });
+    r.setDepthWrite(false);
+    for (const Puff &pf : puffs)
+        r.sprite(pf.sp, pf.iw, pf.radius, pf.color);
+    r.setDepthWrite(true);
 }
 
 bool Preview3DView::pickFixture(const QPoint &screen, int &id, double &dist) const
@@ -1382,9 +1704,10 @@ void Preview3DView::renderScene(QPainter &p)
     updateCamera();
 
     // Render the whole 3D scene with a real z-buffer (proper occlusion).
-    // Drop supersampling while the camera/trusses are being dragged so
-    // interaction stays smooth.
-    const int ss = (m_dragMode == DragNone) ? 2 : 1;
+    // Drop supersampling while the camera/trusses are being dragged or while
+    // operate-mode live values are streaming in, so it stays responsive.
+    const bool live = (m_fixtureScene != NULL && m_fixtureScene->isLive());
+    const int ss = (m_dragMode == DragNone && !live) ? 2 : 1;
     m_raster.begin(width(), height(), ss);
     m_raster.fillGradient(m_bgTop, m_bgBottom);
 

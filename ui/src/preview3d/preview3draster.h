@@ -47,11 +47,17 @@ public:
     void dashedLine(const QPointF &p0, const QPointF &p1, double iw0, double iw1,
                     const QColor &color, double width, double dash, double gap);
 
+    /** A soft radial sprite (smoke puff), depth-tested at its centre. */
+    void sprite(const QPointF &center, double iw, double radius, const QColor &color);
+
     /** Downsample and return the finished image. */
     QImage finish();
 
     /** Enable/disable depth writes (disable for transparent geometry). */
     void setDepthWrite(bool on) { m_depthWrite = on; }
+
+    /** Additive blending (for light beams: overlapping colours add up). */
+    void setAdditive(bool on) { m_additive = on; }
 
 private:
     void blend(int x, int y, float iw, const QColor &color);
@@ -61,6 +67,7 @@ private:
     QImage m_img;
     QVector<float> m_depth;
     bool m_depthWrite;
+    bool m_additive;
 };
 
 #endif // PREVIEW3DRASTER_H

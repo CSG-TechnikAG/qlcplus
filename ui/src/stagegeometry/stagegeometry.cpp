@@ -275,7 +275,7 @@ void StageGeometry::syncFixtureToMonitor(StageGeometryFixture *f)
     StageGeom::Room r = m_engine->room();
     double mx = (f->fixture.x() - r.minX()) * 1000.0;
     double my = (r.maxY() - f->fixture.y()) * 1000.0;
-    m_doc->monitorProperties()->setFixturePosition(f->id, 0, 0, QVector3D(mx, 0, my));
+    m_doc->monitorProperties()->setFixturePosition(f->id, 0, 0, QVector3D(mx, my, 0));
 
     emit fixturePositionChanged(f->id, f->fixture.x(), f->fixture.y(), f->fixture.z());
 }

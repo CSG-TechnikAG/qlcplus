@@ -295,6 +295,7 @@ void MonitorProperties::setFixtureGelColor(quint32 fid, quint16 head, quint16 li
         quint32 subID = fixtureSubID(head, linked);
         m_fixtureItems[fid].m_subItems[subID].m_color = col;
     }
+    emit fixtureItemChanged(fid);
 }
 
 QColor MonitorProperties::fixtureGelColor(quint32 fid, quint16 head, quint16 linked) const

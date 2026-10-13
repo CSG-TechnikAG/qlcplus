@@ -20,6 +20,7 @@ SoftwareRaster::SoftwareRaster()
     , m_w(0)
     , m_h(0)
     , m_depthWrite(true)
+    , m_additive(false)
 {
 }
 
@@ -66,7 +67,16 @@ void SoftwareRaster::blend(int x, int y, float iw, const QColor &color)
         m_depth[idx] = iw;
 
     QRgb *row = reinterpret_cast<QRgb *>(m_img.scanLine(y));
-    if (color.alpha() == 255)
+    if (m_additive)
+    {
+        // Light adds up: overlapping beams mix toward white.
+        const int a = color.alpha();
+        const QRgb old = row[x];
+        row[x] = qRgb(qMin(255, qRed(old) + color.red() * a / 255),
+                      qMin(255, qGreen(old) + color.green() * a / 255),
+                      qMin(255, qBlue(old) + color.blue() * a / 255));
+    }
+    else if (color.alpha() == 255)
     {
         row[x] = color.rgb();
     }
@@ -172,6 +182,55 @@ void SoftwareRaster::dashedLine(const QPointF &p0, const QPointF &p1, double iw0
         const double f1 = t1 / len;
         line(a, b, iw0 + (iw1 - iw0) * f0, iw0 + (iw1 - iw0) * f1, color, width);
         t = t1 + gap;
+    }
+}
+
+void SoftwareRaster::sprite(const QPointF &center, double iw, double radius, const QColor &color)
+{
+    if (radius < 0.5 || color.alpha() <= 0)
+        return;
+
+    const double cx = center.x() * m_ss;
+    const double cy = center.y() * m_ss;
+    const double r = radius * m_ss;
+    const int minX = qMax(0, int(cx - r));
+    const int maxX = qMin(m_w - 1, int(cx + r));
+    const int minY = qMax(0, int(cy - r));
+    const int maxY = qMin(m_h - 1, int(cy + r));
+    if (minX > maxX || minY > maxY)
+        return;
+
+    const double r2 = r * r;
+    const int cr = color.red();
+    const int cg = color.green();
+    const int cb = color.blue();
+    const int baseA = color.alpha();
+
+    for (int y = minY; y <= maxY; ++y)
+    {
+        const int row = y * m_w;
+        const double dy = y + 0.5 - cy;
+        const double dy2 = dy * dy;
+        QRgb *line = reinterpret_cast<QRgb *>(m_img.scanLine(y));
+        for (int x = minX; x <= maxX; ++x)
+        {
+            const double dx = x + 0.5 - cx;
+            const double d2 = dx * dx + dy2;
+            if (d2 > r2)
+                continue;
+            const int idx = row + x;
+            if (iw < m_depth[idx])
+                continue;
+            const double f = 1.0 - qSqrt(d2) / r;
+            const int a = int(baseA * f * f);
+            if (a <= 0)
+                continue;
+            const QRgb old = line[x];
+            const int ia = 255 - a;
+            line[x] = qRgb((qRed(old) * ia + cr * a) / 255,
+                           (qGreen(old) * ia + cg * a) / 255,
+                           (qBlue(old) * ia + cb * a) / 255);
+        }
     }
 }
 

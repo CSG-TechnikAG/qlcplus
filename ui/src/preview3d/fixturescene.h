@@ -61,6 +61,7 @@ struct FixtureInstance
     FixtureModel model = FixtureModel::Par;
     int ledCols = 1;                    // LED bar / matrix columns (layout width)
     int ledRows = 1;                    // LED bar / matrix rows (layout height)
+    bool hazer = false;                 // true for a hazer (vs a fog machine)
 
     // Live (operate-mode) values. When `live` is false the renderer falls back
     // to the static colour / orientation above.
@@ -69,6 +70,8 @@ struct FixtureInstance
     QColor liveColor = QColor(255, 255, 255);
     double livePan = 0.0;               // degrees, from the pan channel
     double liveTilt = 0.0;              // degrees, from the tilt channel
+    QVector3D liveDir;                  // world beam direction (calibrated moving heads)
+    bool liveDirValid = false;
     QList<QColor> liveHeads;            // per-head colour (LED bars / matrices)
     QList<double> liveHeadIntensity;    // per-head intensity (LED bars / matrices)
 };
@@ -106,6 +109,19 @@ public:
     /** Enable/disable live value tracking (called on mode changes). */
     void setLive(bool on);
 
+    /** A single volumetric smoke puff (world space). */
+    struct SmokeParticle
+    {
+        QVector3D pos;
+        QVector3D vel;          // internal
+        double age = 0.0;       // internal
+        double life = 1.0;      // internal
+        double size = 0.2;      // world radius (metres)
+        double alpha = 0.0;     // 0..1
+    };
+    /** Puffs emitted by a smoke machine (empty for other fixtures). */
+    const QList<SmokeParticle> &smokeParticles(quint32 id) const;
+
     /*********************************************************************
      * Load & Save (3D-only extras)
      *********************************************************************/
@@ -121,6 +137,7 @@ signals:
 private slots:
     void slotLiveTick();
     void slotStrobeTick();
+    void slotSmokeTick();
 
 private:
     void readFromMonitor(FixtureInstance &fi);
@@ -129,6 +146,7 @@ private:
     void updateModel(FixtureInstance &fi, Fixture *fx);
     void buildLiveCache(quint32 id, Fixture *fx);
     void updateLive();
+    void updateSmoke(double dt);
 
     Doc *m_doc;
     bool m_writing = false;
@@ -160,8 +178,17 @@ private:
     QList<Fixture *> m_liveFixtures;    // fixtures whose valuesChanged we watch
     QTimer *m_liveTimer;                // coalesces rapid updates
     QTimer *m_strobeTimer;              // drives the strobe phase
+    QTimer *m_smokeTimer;               // drives the smoke simulation
     bool m_live;
     bool m_strobePhase;
+
+    struct SmokeState
+    {
+        QList<SmokeParticle> particles;
+        double accum = 0.0;
+    };
+    QHash<quint32, SmokeState> m_smoke;
+    QList<SmokeParticle> m_noSmoke;     // returned for non-smoke fixtures
 };
 
 #endif // FIXTURESCENE_H

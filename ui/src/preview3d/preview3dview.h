@@ -70,6 +70,9 @@ public:
     bool isGridVisible() const { return m_showGrid; }
     void setGridVisible(bool on);
 
+    /** Show static beams in design mode (operate mode always shows live beams). */
+    void setBeamPreview(bool on);
+
     /** Trusses to render. */
     void setTrussScene(TrussScene *scene);
     /** Enable/disable truss picking, dragging and linking. */
@@ -165,6 +168,22 @@ private:
     void rasterFixtureBeam(SoftwareRaster &r, const QVector3D &origin, const QQuaternion &rot,
                            double beamDeg, const QColor &color, double length = 3.0,
                            int alpha = 50) const;
+    /**
+     * Distance a beam travels from `origin` along `dir` before hitting the stage
+     * deck, the room floor, or leaving the room. Used to avoid beams being cut
+     * off at an arbitrary length.
+     */
+    double beamLength(const QVector3D &origin, const QVector3D &dir) const;
+    /** Where a beam stops: distance, world point and the surface normal. */
+    struct BeamHit
+    {
+        double t = 0.0;
+        QVector3D point;
+        QVector3D normal = QVector3D(0.0, 0.0, 1.0);
+    };
+    BeamHit beamHit(const QVector3D &origin, const QVector3D &dir) const;
+    /** Nearest occluder/surface distance for one beam ray (per-edge collision). */
+    double beamRay(const QVector3D &origin, const QVector3D &dir) const;
     /** A translucent rectangular beam (frustum) emitted along the rotated local +Y. */
     void rasterRectBeam(SoftwareRaster &r, const QVector3D &origin, const QQuaternion &rot,
                         double halfW, double halfH, double length, double spread,
@@ -190,6 +209,7 @@ private:
     bool m_hasFitted;
     bool m_userMoved;
     bool m_showGrid;
+    bool m_beamPreview;
 
     DragMode m_dragMode;
     QPoint m_lastMouse;
@@ -219,6 +239,15 @@ private:
     QColor m_selectColor;
 
     SoftwareRaster m_raster;
+
+    // Beam collision occluders (truss segments), rebuilt each frame.
+    struct Occluder
+    {
+        QVector3D a;
+        QVector3D b;
+        double radius;
+    };
+    mutable QList<Occluder> m_occluders;
 
     QElapsedTimer m_fpsTimer;
     QElapsedTimer m_frameTimer;

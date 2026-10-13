@@ -862,7 +862,7 @@ void Monitor::slotStageFixturePosition(quint32 id, double x, double y, double z)
 {
     Q_UNUSED(z)
     QPointF mm = worldToMonitorMm(x, y);
-    m_props->setFixturePosition(id, 0, 0, QVector3D(mm.x(), 0, mm.y()));
+    m_props->setFixturePosition(id, 0, 0, QVector3D(mm.x(), mm.y(), 0));
     if (m_graphicsView != NULL)
         m_graphicsView->setFixturePosition(id, mm);
 }

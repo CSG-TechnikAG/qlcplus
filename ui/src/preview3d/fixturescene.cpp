@@ -12,6 +12,8 @@
 #include <QtMath>
 #include <QSize>
 #include <QTimer>
+#include <QQuaternion>
+#include <QRandomGenerator>
 
 #include "fixturescene.h"
 #include "doc.h"
@@ -30,6 +32,7 @@ FixtureScene::FixtureScene(Doc *doc, QObject *parent)
     , m_doc(doc)
     , m_liveTimer(NULL)
     , m_strobeTimer(NULL)
+    , m_smokeTimer(NULL)
     , m_live(false)
     , m_strobePhase(true)
 {
@@ -41,6 +44,10 @@ FixtureScene::FixtureScene(Doc *doc, QObject *parent)
     m_strobeTimer = new QTimer(this);
     m_strobeTimer->setInterval(45); // ~11 Hz strobe
     connect(m_strobeTimer, &QTimer::timeout, this, &FixtureScene::slotStrobeTick);
+
+    m_smokeTimer = new QTimer(this);
+    m_smokeTimer->setInterval(33);  // ~30 Hz smoke simulation
+    connect(m_smokeTimer, &QTimer::timeout, this, &FixtureScene::slotSmokeTick);
 
     if (m_doc != NULL)
     {
@@ -64,6 +71,17 @@ FixtureScene::FixtureScene(Doc *doc, QObject *parent)
         if (m_doc->monitorProperties() != NULL)
             connect(m_doc->monitorProperties(), &MonitorProperties::fixtureItemChanged,
                     this, [this](quint32) { if (!m_writing && !m_clearing) rebuild(); });
+
+        // A Stage Geometry calibration carries the full 3D position, including
+        // the height that the Fixture Monitor does not know about.
+        StageGeometry *sg = StageGeometry::instance();
+        if (sg != NULL)
+            connect(sg, &StageGeometry::fixturePositionChanged, this,
+                    [this](quint32 id, double, double, double z) {
+                        m_extras[id].height = z;
+                        if (!m_clearing)
+                            rebuild();
+                    });
 
         m_live = (m_doc->mode() == Doc::Operate);
     }
@@ -139,6 +157,8 @@ void FixtureScene::updateModel(FixtureInstance &fi, Fixture *fx)
         fi.model = FixtureModel::Par;
         break;
     }
+
+    fi.hazer = (fx->type() == QLCFixtureDef::Hazer);
 
     QLCPhysical ph;
     // The mode's physical is authoritative for an instance (it carries the LED
@@ -315,6 +335,28 @@ void FixtureScene::rebuild()
         }
     }
 
+    // Smoke simulation runs while any fogger/hazer is present.
+    bool hasSmoke = false;
+    for (const FixtureInstance &fi : m_fixtures)
+    {
+        if (fi.model == FixtureModel::Smoke)
+        {
+            hasSmoke = true;
+            break;
+        }
+    }
+    if (hasSmoke && m_live)
+    {
+        if (!m_smokeTimer->isActive())
+            m_smokeTimer->start();
+    }
+    else
+    {
+        m_smokeTimer->stop();
+        if (!hasSmoke)
+            m_smoke.clear();
+    }
+
     if (m_live)
         updateLive();
 
@@ -420,6 +462,93 @@ static bool fixtureIsStrobing(Fixture *fx, const QByteArray &values,
     return false;
 }
 
+static QColor blendColors(const QColor &base, const QColor &add, double t)
+{
+    return QColor(int(base.red() * (1.0 - t) + add.red() * t),
+                  int(base.green() * (1.0 - t) + add.green() * t),
+                  int(base.blue() * (1.0 - t) + add.blue() * t));
+}
+
+static QColor applyColorFilter(const QColor &source, const QColor &filter)
+{
+    return QColor(source.redF() * filter.redF() * 255.0,
+                  source.greenF() * filter.greenF() * 255.0,
+                  source.blueF() * filter.blueF() * 255.0);
+}
+
+/**
+ * The colour a head is currently emitting: RGB / CMY mixers, additive
+ * White / Amber / UV / Lime / Indigo channels and colour wheels. Falls back to
+ * `fallback` (the gel colour) when the fixture carries no colour information.
+ */
+static QColor computeHeadColor(Fixture *fx, int headIndex, const QByteArray &v, const QColor &fallback)
+{
+    if (fx == NULL || headIndex < 0 || headIndex >= fx->heads())
+        return fallback;
+
+    QColor color(Qt::black);
+    bool found = false;
+
+    const QVector<quint32> rgb = fx->rgbChannels(headIndex);
+    if (rgb.size() == 3 && int(rgb.at(2)) < v.size())
+    {
+        color.setRgb(uchar(v.at(rgb.at(0))), uchar(v.at(rgb.at(1))), uchar(v.at(rgb.at(2))));
+        found = true;
+    }
+
+    const QVector<quint32> cmy = fx->cmyChannels(headIndex);
+    if (cmy.size() == 3 && int(cmy.at(2)) < v.size())
+    {
+        color.setCmyk(uchar(v.at(cmy.at(0))), uchar(v.at(cmy.at(1))), uchar(v.at(cmy.at(2))), 0);
+        found = true;
+    }
+
+    struct Extra { int key; QColor col; };
+    const Extra extras[] = {
+        { QLCChannel::White,  QColor(Qt::white) },
+        { QLCChannel::Amber,  QColor(0xFF7E00) },
+        { QLCChannel::UV,     QColor(0x9400D3) },
+        { QLCChannel::Lime,   QColor(0xADFF2F) },
+        { QLCChannel::Indigo, QColor(0x4B0082) }
+    };
+    for (const Extra &e : extras)
+    {
+        const quint32 ch = fx->channelNumber(e.key, QLCChannel::MSB, headIndex);
+        if (ch == QLCChannel::invalid() || int(ch) >= v.size())
+            continue;
+        const int val = uchar(v.at(ch));
+        if (val > 0)
+            color = blendColors(found ? color : QColor(Qt::black), e.col, val / 255.0);
+        found = true;
+    }
+
+    // Colour wheels tint whatever the mixers produced.
+    const QLCFixtureHead head = fx->head(headIndex);
+    for (quint32 wheel : head.colorWheels())
+    {
+        if (int(wheel) >= v.size())
+            continue;
+        QLCChannel *ch = (fx->fixtureMode() != NULL) ? fx->fixtureMode()->channel(wheel) : NULL;
+        if (ch == NULL)
+            continue;
+        QLCCapability *cap = ch->searchCapability(uchar(v.at(wheel)));
+        if (cap == NULL)
+            continue;
+        if (cap->presetType() == QLCCapability::SingleColor ||
+            cap->presetType() == QLCCapability::DoubleColor)
+        {
+            const QColor wc = cap->resource(0).value<QColor>();
+            if (wc.isValid())
+            {
+                color = found ? applyColorFilter(color, wc) : wc;
+                found = true;
+            }
+        }
+    }
+
+    return found ? color : fallback;
+}
+
 void FixtureScene::updateLive()
 {
     bool anyStrobe = false;
@@ -430,6 +559,7 @@ void FixtureScene::updateLive()
         if (!m_live || fx == NULL)
         {
             fi.live = false;
+            fi.liveDirValid = false;
             fi.liveHeads.clear();
             fi.liveHeadIntensity.clear();
             continue;
@@ -439,20 +569,7 @@ void FixtureScene::updateLive()
         const QByteArray v = fx->channelValues();
 
         // Colour from the first head (per-head for bars below).
-        QColor col(255, 255, 255);
-        bool hasCol = false;
-        if (lc.rgb.size() >= 3 && int(lc.rgb.at(2)) < v.size())
-        {
-            col = QColor(uchar(v.at(lc.rgb.at(0))), uchar(v.at(lc.rgb.at(1))),
-                         uchar(v.at(lc.rgb.at(2))));
-            hasCol = true;
-        }
-        else if (lc.cmy.size() >= 3 && int(lc.cmy.at(2)) < v.size())
-        {
-            col = QColor::fromCmyk(uchar(v.at(lc.cmy.at(0))), uchar(v.at(lc.cmy.at(1))),
-                                   uchar(v.at(lc.cmy.at(2))), 0);
-            hasCol = true;
-        }
+        const QColor col = computeHeadColor(fx, 0, v, fi.color);
 
         // Intensity from dimmer * master.
         double inten = 1.0;
@@ -468,6 +585,40 @@ void FixtureScene::updateLive()
         if (lc.tilt >= 0 && lc.tilt < v.size())
             tilt = double(uchar(v.at(lc.tilt))) * lc.tiltMax / 255.0 - lc.tiltMax * 0.5;
 
+        // World beam direction for moving heads: prefer the Stage Geometry
+        // calibration (the exact mapping the Path function / aim uses), else
+        // fall back to the hanging-head beam model.
+        fi.liveDirValid = false;
+        if (fi.model == FixtureModel::MovingHead)
+        {
+            bool have = false;
+            double panRad = 0.0, tiltRad = 0.0;
+
+            StageGeometry *sg = StageGeometry::instance();
+            double gx, gy, gz, panK, panT, tiltK, tiltT;
+            int panCh = -1, tiltCh = -1, dimCh = -1;
+            if (sg != NULL
+                && sg->fixtureAimData(fi.id, gx, gy, gz, panK, panT, tiltK, tiltT, panCh, tiltCh, dimCh)
+                && panCh >= 0 && panCh < v.size() && tiltCh >= 0 && tiltCh < v.size())
+            {
+                panRad = StageGeom::AxisCalibration(panK, panT).angle(uchar(v.at(panCh)));
+                tiltRad = StageGeom::AxisCalibration(tiltK, tiltT).angle(uchar(v.at(tiltCh)));
+                have = true;
+            }
+            else if (lc.pan >= 0 && lc.pan < v.size() && lc.tilt >= 0 && lc.tilt < v.size())
+            {
+                panRad = qDegreesToRadians((double(uchar(v.at(lc.pan))) / 255.0 - 0.5) * lc.panMax);
+                tiltRad = qDegreesToRadians((double(uchar(v.at(lc.tilt))) / 255.0 - 0.5) * lc.tiltMax);
+                have = true;
+            }
+
+            if (have)
+            {
+                fi.liveDir = StageGeom::beamDirection(panRad, tiltRad);
+                fi.liveDirValid = true;
+            }
+        }
+
         const bool strobing = fixtureIsStrobing(fx, v, lc.shutter);
         if (strobing)
         {
@@ -477,7 +628,7 @@ void FixtureScene::updateLive()
         }
 
         fi.live = true;
-        fi.liveColor = hasCol ? col : fi.color;
+        fi.liveColor = col;
         fi.liveIntensity = inten;
         fi.livePan = pan;
         fi.liveTilt = tilt;
@@ -490,11 +641,7 @@ void FixtureScene::updateLive()
             for (int h = 0; h < fx->heads(); ++h)
             {
                 const QLCFixtureHead head = fx->head(h);
-                const QVector<quint32> rgb = head.rgbChannels();
-                QColor hc = col;
-                if (rgb.size() >= 3 && int(rgb.at(2)) < v.size())
-                    hc = QColor(uchar(v.at(rgb.at(0))), uchar(v.at(rgb.at(1))),
-                                uchar(v.at(rgb.at(2))));
+                const QColor hc = computeHeadColor(fx, h, v, col);
                 double hi = inten;
                 const quint32 hdim = head.channelNumber(QLCChannel::Intensity, QLCChannel::MSB);
                 if (hdim != QLCChannel::invalid() && int(hdim) < v.size())
@@ -529,6 +676,22 @@ void FixtureScene::setLive(bool on)
         m_strobeTimer->stop();
         m_liveTimer->stop();
     }
+
+    // Smoke only simulates while running.
+    bool hasSmoke = false;
+    for (const FixtureInstance &fi : m_fixtures)
+    {
+        if (fi.model == FixtureModel::Smoke)
+        {
+            hasSmoke = true;
+            break;
+        }
+    }
+    if (on && hasSmoke)
+        m_smokeTimer->start();
+    else
+        m_smokeTimer->stop();
+
     updateLive();
 }
 
@@ -543,6 +706,116 @@ void FixtureScene::slotStrobeTick()
     m_strobePhase = !m_strobePhase;
     if (m_live)
         updateLive();
+}
+
+const QList<FixtureScene::SmokeParticle> &FixtureScene::smokeParticles(quint32 id) const
+{
+    auto it = m_smoke.constFind(id);
+    if (it != m_smoke.constEnd())
+        return it->particles;
+    return m_noSmoke;
+}
+
+void FixtureScene::slotSmokeTick()
+{
+    updateSmoke(m_smokeTimer->interval() / 1000.0);
+    emit liveChanged();
+}
+
+void FixtureScene::updateSmoke(double dt)
+{
+    if (dt <= 0.0)
+        return;
+
+    StageGeom::Room room(0, 1, 0, 1, 0, 4);
+    if (StageGeometry::instance() != NULL)
+        room = StageGeometry::instance()->room();
+
+    for (FixtureInstance &fi : m_fixtures)
+    {
+        if (fi.model != FixtureModel::Smoke)
+            continue;
+
+        SmokeState &st = m_smoke[fi.id];
+        const bool hazer = fi.hazer;
+        const double inten = fi.live ? fi.liveIntensity : 0.45;
+
+        const QQuaternion rot = QQuaternion::fromAxisAndAngle(QVector3D(0.0, 0.0, 1.0), fi.yaw)
+                              * QQuaternion::fromAxisAndAngle(QVector3D(1.0, 0.0, 0.0), fi.pitch);
+        const double sy = fi.size.y();
+        const double sz = fi.size.z();
+        const QVector3D nozzle = fi.pos + rot.rotatedVector(QVector3D(0.0, sy * 0.5 + sy * 0.16, sz * 0.26));
+        const QVector3D dir = rot.rotatedVector(QVector3D(0.0, 1.0, 0.0));
+
+        auto rnd = []() { return QRandomGenerator::global()->generateDouble() - 0.5; };
+
+        // Emission rate scales with the machine's intensity.
+        const double rate = (hazer ? 6.0 : 20.0) * inten;
+        const int maxParticles = hazer ? 45 : 65;
+        st.accum += rate * dt;
+        while (st.accum >= 1.0)
+        {
+            st.accum -= 1.0;
+            if (st.particles.size() >= maxParticles)
+            {
+                st.accum = 0.0;
+                break;
+            }
+            SmokeParticle p;
+            p.pos = nozzle + QVector3D(rnd() * 0.06, rnd() * 0.06, rnd() * 0.06);
+            const double spread = hazer ? 0.12 : 0.30;
+            p.vel = dir * (hazer ? 0.35 : 1.5)
+                  + QVector3D(rnd() * spread, rnd() * spread, rnd() * spread + (hazer ? 0.10 : 0.35));
+            p.age = 0.0;
+            p.life = hazer ? 14.0 : 4.5;
+            st.particles << p;
+        }
+
+        // Timed decay: grow, rise and fade out.
+        for (int i = st.particles.size() - 1; i >= 0; --i)
+        {
+            SmokeParticle &p = st.particles[i];
+            p.age += dt;
+            if (p.age >= p.life)
+            {
+                st.particles.removeAt(i);
+                continue;
+            }
+            const double u = p.age / p.life;
+            p.vel += QVector3D(0.0, 0.0, hazer ? 0.10 : 0.30) * dt;   // buoyancy
+            p.vel *= (hazer ? 0.997 : 0.985);                          // drag
+            p.pos += p.vel * dt;
+
+            const double size0 = hazer ? 0.40 : 0.18;
+            const double size1 = hazer ? 3.00 : 1.10;
+            p.size = size0 + (size1 - size0) * u;
+            const double a0 = hazer ? 0.14 : 0.70;
+            p.alpha = a0 * (1.0 - u);
+
+            // Keep puffs inside the room.
+            p.pos.setX(float(qBound(room.minX() + 0.1, double(p.pos.x()), room.maxX() - 0.1)));
+            p.pos.setY(float(qBound(room.minY() + 0.1, double(p.pos.y()), room.maxY() - 0.1)));
+            p.pos.setZ(float(qBound(room.minZ() + 0.1, double(p.pos.z()), room.maxZ() - 0.1)));
+        }
+    }
+
+    // Drop states for fixtures that are no longer smoke machines.
+    for (auto it = m_smoke.begin(); it != m_smoke.end(); )
+    {
+        bool exists = false;
+        for (const FixtureInstance &fi : m_fixtures)
+        {
+            if (fi.id == it.key() && fi.model == FixtureModel::Smoke)
+            {
+                exists = true;
+                break;
+            }
+        }
+        if (exists)
+            ++it;
+        else
+            it = m_smoke.erase(it);
+    }
 }
 
 void FixtureScene::setPosition(quint32 id, const QVector3D &pos)

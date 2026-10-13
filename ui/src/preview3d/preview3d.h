@@ -67,6 +67,7 @@ private slots:
     void slotFit();
     void slotReset();
     void slotGridToggled(bool on);
+    void slotBeamPreviewToggled(bool on);
     void slotTrussToggled(bool on);
     void slotFixtureToggled(bool on);
     void slotTrussSceneChanged();
@@ -89,6 +90,7 @@ private:
     QAction *m_fitAction;
     QAction *m_resetAction;
     QAction *m_gridAction;
+    QAction *m_beamPreviewAction;
     QAction *m_trussAction;
     QAction *m_fixtureAction;
 };

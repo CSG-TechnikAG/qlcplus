@@ -64,6 +64,12 @@ Preview3D::Preview3D(QWidget *parent, Doc *doc)
     m_gridAction->setToolTip(tr("Show or hide the floor grid"));
     connect(m_gridAction, &QAction::toggled, this, &Preview3D::slotGridToggled);
 
+    m_beamPreviewAction = m_toolbar->addAction(QIcon(":/intensity.png"), tr("Beam preview"));
+    m_beamPreviewAction->setCheckable(true);
+    m_beamPreviewAction->setChecked(false);
+    m_beamPreviewAction->setToolTip(tr("Show static beams in design mode"));
+    connect(m_beamPreviewAction, &QAction::toggled, this, &Preview3D::slotBeamPreviewToggled);
+
     m_toolbar->addSeparator();
 
     m_trussAction = m_toolbar->addAction(QIcon(":/truss.png"), tr("Truss"));
@@ -143,6 +149,8 @@ void Preview3D::clearContents()
         m_fixtureScene->clear();
     if (m_gridAction != NULL)
         m_gridAction->setChecked(true);
+    if (m_beamPreviewAction != NULL)
+        m_beamPreviewAction->setChecked(false);
     if (m_trussAction != NULL)
         m_trussAction->setChecked(false);
     if (m_fixtureAction != NULL)
@@ -187,6 +195,7 @@ bool Preview3D::saveXML(QXmlStreamWriter *doc) const
     doc->writeAttribute("TargetY", QString::number(target.y(), 'g', 8));
     doc->writeAttribute("TargetZ", QString::number(target.z(), 'g', 8));
     doc->writeAttribute("Grid", (m_gridAction != NULL && m_gridAction->isChecked()) ? "true" : "false");
+    doc->writeAttribute("BeamPreview", (m_beamPreviewAction != NULL && m_beamPreviewAction->isChecked()) ? "true" : "false");
     doc->writeAttribute("Panel", (m_trussAction != NULL && m_trussAction->isChecked()) ? "true" : "false");
 
     if (m_trussScene != NULL)
@@ -209,6 +218,7 @@ bool Preview3D::loadXML(QXmlStreamReader &root)
 
     const QXmlStreamAttributes a = root.attributes();
     const bool grid = (a.value("Grid") != "false");
+    const bool beamPreview = (a.value("BeamPreview") == "true");
     const bool panel = (a.value("Panel") == "true");
 
     m_loading = true;
@@ -246,6 +256,8 @@ bool Preview3D::loadXML(QXmlStreamReader &root)
 
     if (m_gridAction != NULL)
         m_gridAction->setChecked(grid);
+    if (m_beamPreviewAction != NULL)
+        m_beamPreviewAction->setChecked(beamPreview);
     if (m_trussAction != NULL)
         m_trussAction->setChecked(panel);
 
@@ -288,6 +300,12 @@ void Preview3D::slotGridToggled(bool on)
 {
     if (m_view != NULL)
         m_view->setGridVisible(on);
+}
+
+void Preview3D::slotBeamPreviewToggled(bool on)
+{
+    if (m_view != NULL)
+        m_view->setBeamPreview(on);
 }
 
 void Preview3D::slotTrussToggled(bool on)
