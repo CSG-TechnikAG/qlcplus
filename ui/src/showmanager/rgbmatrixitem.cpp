@@ -47,12 +47,12 @@ void RGBMatrixItem::calculateWidth()
     qint64 matrixDuration = getDuration();
 
     if (matrixDuration != 0)
-        newWidth = ((50 / float(getTimeScale())) * float(matrixDuration)) / 1000;
+        newWidth = qRound((50.0 / double(getTimeScale())) * double(matrixDuration) / 1000.0);
     else
         newWidth = 100;
 
-    if (newWidth < (50 / m_timeScale))
-        newWidth = 50 / m_timeScale;
+    if (newWidth < qRound(50.0 / double(m_timeScale)))
+        newWidth = qRound(50.0 / double(m_timeScale));
     setWidth(newWidth);
 }
 
@@ -66,15 +66,19 @@ void RGBMatrixItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *opt
 
     ShowItem::paint(painter, option, widget);
 
+    const quint32 step = stepDuration();
     int loopCount = 0;
-    if (getDuration() == Function::infiniteSpeed())
-        loopCount = 10000 / m_matrix->duration();
-    else if (getDuration() > 0)
-        loopCount = qFloor(getDuration() / m_matrix->duration());
+    if (step > 0)
+    {
+        if (getDuration() == Function::infiniteSpeed())
+            loopCount = 10000 / step;
+        else if (getDuration() > 0)
+            loopCount = qFloor(getDuration() / step);
+    }
 
     for (int i = 0; i < loopCount; i++)
     {
-        xpos += ((timeUnit * float(m_matrix->totalDuration())) / 1000);
+        xpos += ((timeUnit * float(step)) / 1000);
         // draw loop vertical delimiter
         painter->setPen(QPen(Qt::white, 1));
         painter->drawLine(int(xpos), 1, int(xpos), TRACK_HEIGHT - 5);
@@ -83,7 +87,7 @@ void RGBMatrixItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *opt
     ShowItem::postPaint(painter);
 }
 
-void RGBMatrixItem::setTimeScale(int val)
+void RGBMatrixItem::setTimeScale(qreal val)
 {
     ShowItem::setTimeScale(val);
     calculateWidth();
@@ -91,18 +95,35 @@ void RGBMatrixItem::setTimeScale(int val)
 
 void RGBMatrixItem::setDuration(quint32 msec, bool stretch)
 {
-    if (stretch == true)
+    ShowItem::setDuration(msec, stretch);
+    prepareGeometryChange();
+    calculateWidth();
+    update();
+}
+
+quint32 RGBMatrixItem::stepDuration() const
+{
+    if (m_function == NULL)
+        return m_matrix->duration();
+
+    if (m_function->functionSpeed() > 0)
+        return m_function->functionSpeed();
+
+    if (m_function->stretch() == true && m_function->duration() > 0)
     {
-        m_matrix->setTotalDuration(msec);
+        const quint32 sourceStep = m_matrix->duration();
+        const quint32 sourceTotal = m_matrix->totalDuration();
+        if (sourceStep > 0 && sourceStep != Function::infiniteSpeed() &&
+            sourceTotal > sourceStep && sourceTotal != Function::infiniteSpeed())
+        {
+            const quint32 steps = sourceTotal / sourceStep;
+            if (steps > 0)
+                return qMax<quint32>(1, m_function->duration() / steps);
+        }
+        return m_function->duration();
     }
-    else
-    {
-        if (m_function)
-            m_function->setDuration(msec);
-        prepareGeometryChange();
-        calculateWidth();
-        updateTooltip();
-    }
+
+    return m_matrix->duration();
 }
 
 quint32 RGBMatrixItem::getDuration() const

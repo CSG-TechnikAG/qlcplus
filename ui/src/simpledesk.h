@@ -43,6 +43,7 @@ class QGroupBox;
 class QTreeView;
 class QSplitter;
 class QSpinBox;
+class QLineEdit;
 class CueStack;
 class Doc;
 class Cue;
@@ -122,8 +123,10 @@ private:
     void resetUniverseSliders();
     void initSliderView(bool fullMode);
     void initChannelGroupsView();
+    void updateThemeStyles();
 
 private slots:
+    void slotThemeChanged();
     void slotUniversesComboChanged(int index);
     void slotViewModeClicked(bool toggle);
     void slotUniversePageUpClicked();
@@ -142,6 +145,7 @@ private:
     QToolButton *m_viewModeButton;
     QToolButton *m_universePageUpButton;
     QSpinBox *m_universePageSpin;
+    QLineEdit *m_universePageEdit;
     QToolButton *m_universePageDownButton;
     QToolButton *m_universeResetButton;
     GrandMasterSlider *m_grandMasterSlider;

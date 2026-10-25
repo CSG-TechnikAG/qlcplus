@@ -22,6 +22,7 @@
 #include <QCoreApplication>
 #include <QDebug>
 #include <QFile>
+#include <QDataStream>
 
 #include "audiodecoder.h"
 #include "audiorenderer.h"
@@ -47,6 +48,15 @@
 #define KXMLQLCAudioSource QStringLiteral("Source")
 #define KXMLQLCAudioDevice QStringLiteral("Device")
 #define KXMLQLCAudioVolume QStringLiteral("Volume")
+#define KXMLQLCAudioArtist QStringLiteral("Artist")
+#define KXMLQLCAudioAlbum QStringLiteral("Album")
+#define KXMLQLCAudioGenre QStringLiteral("Genre")
+#define KXMLQLCAudioSongRequestId QStringLiteral("SongRequestID")
+#define KXMLQLCAudioAnalysis QStringLiteral("Analysis")
+#define KXMLQLCAudioBpm QStringLiteral("BPM")
+#define KXMLQLCAudioWaveform QStringLiteral("Waveform")
+#define KXMLQLCAudioBeats QStringLiteral("Beats")
+#define KXMLQLCAudioTriggers QStringLiteral("Triggers")
 
 /*****************************************************************************
  * Initialization
@@ -117,6 +127,14 @@ bool Audio::copyFrom(const Function* function)
 
     setSourceFileName(aud->m_sourceFileName);
     m_audioDuration = aud->m_audioDuration;
+    m_artist = aud->m_artist;
+    m_album = aud->m_album;
+    m_genre = aud->m_genre;
+    m_songRequestId = aud->m_songRequestId;
+    m_bpm = aud->m_bpm;
+    m_waveform = aud->m_waveform;
+    m_beats = aud->m_beats;
+    m_triggers = aud->m_triggers;
 
     return Function::copyFrom(function);
 }
@@ -153,6 +171,10 @@ bool Audio::setSourceFileName(QString filename)
             m_decoder = NULL;
         }
     }
+
+    const bool sourceChanged = (m_sourceFileName != filename);
+    if (sourceChanged)
+        clearAnalysis();
 
     m_sourceFileName = filename;
 
@@ -213,6 +235,106 @@ QString Audio::audioDevice() const
     return m_audioDevice;
 }
 
+QString Audio::artist() const
+{
+    return m_artist;
+}
+
+void Audio::setArtist(const QString &artist)
+{
+    if (m_artist == artist)
+        return;
+    m_artist = artist;
+    emit changed(id());
+}
+
+QString Audio::album() const
+{
+    return m_album;
+}
+
+void Audio::setAlbum(const QString &album)
+{
+    if (m_album == album)
+        return;
+    m_album = album;
+    emit changed(id());
+}
+
+QString Audio::genre() const
+{
+    return m_genre;
+}
+
+void Audio::setGenre(const QString &genre)
+{
+    if (m_genre == genre)
+        return;
+    m_genre = genre;
+    emit changed(id());
+}
+
+QString Audio::songRequestId() const
+{
+    return m_songRequestId;
+}
+
+void Audio::setSongRequestId(const QString &requestId)
+{
+    if (m_songRequestId == requestId)
+        return;
+    m_songRequestId = requestId;
+    emit changed(this->id());
+}
+
+double Audio::bpm() const
+{
+    return m_bpm;
+}
+
+QByteArray Audio::waveform() const
+{
+    return m_waveform;
+}
+
+QVector<quint32> Audio::beatPositions() const
+{
+    return m_beats;
+}
+
+QVector<quint32> Audio::triggerPoints() const
+{
+    return m_triggers;
+}
+
+bool Audio::hasAnalysis() const
+{
+    return m_waveform.isEmpty() == false;
+}
+
+void Audio::setAnalysis(double bpm, const QByteArray &waveform,
+                        const QVector<quint32> &beats,
+                        const QVector<quint32> &triggers)
+{
+    m_bpm = qBound(0.0, bpm, 400.0);
+    m_waveform = waveform;
+    m_beats = beats;
+    m_triggers = triggers;
+    emit analysisChanged();
+    emit changed(id());
+}
+
+void Audio::clearAnalysis()
+{
+    if (m_bpm == 0 && m_waveform.isEmpty() && m_beats.isEmpty() && m_triggers.isEmpty())
+        return;
+    m_bpm = 0.0;
+    m_waveform.clear();
+    m_beats.clear();
+    m_triggers.clear();
+    emit analysisChanged();
+}
+
 int Audio::adjustAttribute(qreal fraction, int attributeId)
 {
     int attrIndex = Function::adjustAttribute(fraction, attributeId);
@@ -270,10 +392,36 @@ bool Audio::saveXML(QXmlStreamWriter *doc) const
 
     if (m_volume != 1.0)
         doc->writeAttribute(KXMLQLCAudioVolume, QString::number(m_volume));
+    if (m_artist.isEmpty() == false)
+        doc->writeAttribute(KXMLQLCAudioArtist, m_artist);
+    if (m_album.isEmpty() == false)
+        doc->writeAttribute(KXMLQLCAudioAlbum, m_album);
+    if (m_genre.isEmpty() == false)
+        doc->writeAttribute(KXMLQLCAudioGenre, m_genre);
+    if (m_songRequestId.isEmpty() == false)
+        doc->writeAttribute(KXMLQLCAudioSongRequestId, m_songRequestId);
 
     doc->writeCharacters(m_doc->normalizeComponentPath(m_sourceFileName));
 
     doc->writeEndElement();
+
+    if (m_bpm > 0 || m_waveform.isEmpty() == false)
+    {
+        doc->writeStartElement(KXMLQLCAudioAnalysis);
+        doc->writeAttribute(KXMLQLCAudioBpm, QString::number(m_bpm, 'g', 10));
+        doc->writeTextElement(KXMLQLCAudioWaveform, QString::fromLatin1(m_waveform.toBase64()));
+        QByteArray beats;
+        QDataStream bStream(&beats, QIODevice::WriteOnly);
+        for (quint32 v : m_beats)
+            bStream << v;
+        QByteArray triggers;
+        QDataStream tStream(&triggers, QIODevice::WriteOnly);
+        for (quint32 v : m_triggers)
+            tStream << v;
+        doc->writeTextElement(KXMLQLCAudioBeats, QString::fromLatin1(beats.toBase64()));
+        doc->writeTextElement(KXMLQLCAudioTriggers, QString::fromLatin1(triggers.toBase64()));
+        doc->writeEndElement();
+    }
 
     /* End the <Function> tag */
     doc->writeEndElement();
@@ -308,6 +456,10 @@ bool Audio::loadXML(QXmlStreamReader &root)
                 setAudioDevice(attrs.value(KXMLQLCAudioDevice).toString());
             if (attrs.hasAttribute(KXMLQLCAudioVolume))
                 setVolume(attrs.value(KXMLQLCAudioVolume).toString().toDouble());
+            m_artist = attrs.value(KXMLQLCAudioArtist).toString();
+            m_album = attrs.value(KXMLQLCAudioAlbum).toString();
+            m_genre = attrs.value(KXMLQLCAudioGenre).toString();
+            m_songRequestId = attrs.value(KXMLQLCAudioSongRequestId).toString();
 
             setSourceFileName(m_doc->denormalizeComponentPath(root.readElementText()));
         }
@@ -318,6 +470,44 @@ bool Audio::loadXML(QXmlStreamReader &root)
         else if (root.name() == KXMLQLCFunctionRunOrder)
         {
             loadXMLRunOrder(root);
+        }
+        else if (root.name() == KXMLQLCAudioAnalysis)
+        {
+            const double bpm = root.attributes().value(KXMLQLCAudioBpm).toDouble();
+            QByteArray waveform;
+            QByteArray beatsData;
+            QByteArray triggersData;
+            while (root.readNextStartElement())
+            {
+                if (root.name() == KXMLQLCAudioWaveform)
+                    waveform = QByteArray::fromBase64(root.readElementText().toLatin1());
+                else if (root.name() == KXMLQLCAudioBeats)
+                    beatsData = QByteArray::fromBase64(root.readElementText().toLatin1());
+                else if (root.name() == KXMLQLCAudioTriggers)
+                    triggersData = QByteArray::fromBase64(root.readElementText().toLatin1());
+                else
+                    root.skipCurrentElement();
+            }
+            QVector<quint32> beats;
+            QDataStream bStream(&beatsData, QIODevice::ReadOnly);
+            while (bStream.atEnd() == false)
+            {
+                quint32 v;
+                bStream >> v;
+                beats.append(v);
+            }
+            QVector<quint32> triggers;
+            QDataStream tStream(&triggersData, QIODevice::ReadOnly);
+            while (tStream.atEnd() == false)
+            {
+                quint32 v;
+                tStream >> v;
+                triggers.append(v);
+            }
+            m_bpm = qBound(0.0, bpm, 400.0);
+            m_waveform = waveform;
+            m_beats = beats;
+            m_triggers = triggers;
         }
         else
         {

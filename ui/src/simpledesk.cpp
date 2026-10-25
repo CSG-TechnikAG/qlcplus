@@ -31,6 +31,8 @@
 #include <QTreeView>
 #include <QComboBox>
 #include <QSpinBox>
+#include <QLineEdit>
+#include <QIntValidator>
 #include <QLayout>
 #include <QLabel>
 #include <QFrame>
@@ -45,6 +47,8 @@
 #include "cuestackmodel.h"
 #include "groupsconsole.h"
 #include "simpledesk.h"
+#include "appicons.h"
+#include "theme.h"
 #include "cuestack.h"
 #include "apputil.h"
 #include "cue.h"
@@ -80,6 +84,7 @@ SimpleDesk::SimpleDesk(QWidget* parent, Doc* doc)
     , m_engine(new SimpleDeskEngine(doc))
     , m_doc(doc)
     , m_docChanged(false)
+    , m_universePageEdit(NULL)
     , m_chGroupsArea(NULL)
     , m_currentUniverse(0)
     , m_channelsPerPage(DEFAULT_PAGE_CHANNELS)
@@ -108,21 +113,7 @@ SimpleDesk::SimpleDesk(QWidget* parent, Doc* doc)
     for (quint32 i = 0; i < m_doc->inputOutputMap()->universesCount(); i++)
         m_universesPage.append(1);
 
-    QString userStyle = AppUtil::getStyleSheet("SIMPLE_DESK_NONE");
-    if (!userStyle.isEmpty())
-        ssNone = userStyle;
-
-    userStyle = AppUtil::getStyleSheet("SIMPLE_DESK_ODD");
-    if (!userStyle.isEmpty())
-        ssOdd = userStyle;
-
-    userStyle = AppUtil::getStyleSheet("SIMPLE_DESK_EVEN");
-    if (!userStyle.isEmpty())
-        ssEven = userStyle;
-
-    userStyle = AppUtil::getStyleSheet("SIMPLE_DESK_OVERRIDE");
-    if (!userStyle.isEmpty())
-        ssOverride = userStyle;
+    updateThemeStyles();
 
     initEngine();
     initView();
@@ -151,6 +142,8 @@ SimpleDesk::SimpleDesk(QWidget* parent, Doc* doc)
 
     connect(m_doc->inputOutputMap(), SIGNAL(universeWritten(quint32, const QByteArray&)),
             this, SLOT(slotUniverseWritten(quint32, const QByteArray&)));
+
+    connect(Theme::instance(), SIGNAL(changed()), this, SLOT(slotThemeChanged()));
 }
 
 SimpleDesk::~SimpleDesk()
@@ -168,6 +161,70 @@ SimpleDesk::~SimpleDesk()
 SimpleDesk* SimpleDesk::instance()
 {
     return s_instance;
+}
+
+void SimpleDesk::updateThemeStyles()
+{
+    Theme *theme = Theme::instance();
+    const QString groupCss = "QGroupBox { background-color: %1; border: 1px solid %2; "
+                             "border-radius: 8px; color: %3; margin: 0; "
+                             "padding: 4px 2px 2px 2px; }";
+    ssEven = groupCss.arg(theme->color(Theme::SurfaceRaised).name(),
+                          theme->color(Theme::Border).name(),
+                          theme->color(Theme::Text).name());
+    ssOdd = groupCss.arg(theme->color(Theme::Surface).name(),
+                         theme->color(Theme::Border).name(),
+                         theme->color(Theme::Text).name());
+    ssNone = groupCss.arg(theme->color(Theme::Background).name(),
+                          theme->color(Theme::Border).name(),
+                          theme->color(Theme::Text).name());
+    /* Keep modified-channel feedback subtle: a tinted surface, not a bright
+     * red block.  Dark themes get a deeper tint than Daylight. */
+    auto mixColor = [](const QColor &from, const QColor &to, qreal amount)
+    {
+        return QColor::fromRgbF(from.redF() + (to.redF() - from.redF()) * amount,
+                                from.greenF() + (to.greenF() - from.greenF()) * amount,
+                                from.blueF() + (to.blueF() - from.blueF()) * amount);
+    };
+    const bool darkTheme = (theme->scheme() == Theme::Dark || theme->scheme() == Theme::OLED);
+    const QColor danger = theme->color(Theme::Danger);
+    const QColor overrideFill = mixColor(theme->color(Theme::SurfaceRaised), danger,
+                                         darkTheme ? 0.20 : 0.10);
+    const QColor overrideBorder = mixColor(theme->color(Theme::Border), danger,
+                                           darkTheme ? 0.55 : 0.35);
+    ssOverride = groupCss.arg(overrideFill.name(),
+                              overrideBorder.name(),
+                              theme->color(Theme::Text).name());
+
+    QString userStyle = AppUtil::getStyleSheet("SIMPLE_DESK_NONE");
+    if (!userStyle.isEmpty())
+        ssNone = userStyle;
+
+    userStyle = AppUtil::getStyleSheet("SIMPLE_DESK_ODD");
+    if (!userStyle.isEmpty())
+        ssOdd = userStyle;
+
+    userStyle = AppUtil::getStyleSheet("SIMPLE_DESK_EVEN");
+    if (!userStyle.isEmpty())
+        ssEven = userStyle;
+
+    userStyle = AppUtil::getStyleSheet("SIMPLE_DESK_OVERRIDE");
+    if (!userStyle.isEmpty())
+        ssOverride = userStyle;
+}
+
+void SimpleDesk::slotThemeChanged()
+{
+    updateThemeStyles();
+
+    if (m_universePageSpin != NULL)
+        slotUniversePageChanged(m_universePageSpin->value());
+
+    for (PlaybackSlider *slider : m_playbackSliders)
+        slider->refreshTheme();
+
+    if (m_grandMasterSlider != NULL)
+        m_grandMasterSlider->refreshTheme();
 }
 
 void SimpleDesk::clearContents()
@@ -195,7 +252,8 @@ void SimpleDesk::initView()
     //qDebug() << Q_FUNC_INFO;
 
     new QVBoxLayout(this);
-    layout()->setContentsMargins(0, 0, 0, 0);
+    layout()->setContentsMargins(12, 8, 12, 10);
+    layout()->setSpacing(10);
     m_splitter = new QSplitter(this);
     layout()->addWidget(m_splitter);
 
@@ -211,50 +269,82 @@ void SimpleDesk::initTopSide()
 {
     QWidget* topSide = new QWidget(this);
     QVBoxLayout* lay = new QVBoxLayout(topSide);
-    lay->setContentsMargins(1, 1, 1, 1);
+    lay->setContentsMargins(0, 0, 0, 0);
+    lay->setSpacing(10);
     m_splitter->addWidget(topSide);
 
-    QHBoxLayout* uniLay = new QHBoxLayout;
-    uniLay->setContentsMargins(1, 1, 1, 1);
+    QFrame *actionBar = new QFrame(topSide);
+    actionBar->setObjectName("pageActionBar");
+    actionBar->setFixedHeight(48);
+    QHBoxLayout* uniLay = new QHBoxLayout(actionBar);
+    uniLay->setContentsMargins(6, 4, 6, 4);
+    uniLay->setSpacing(6);
 
     m_viewModeButton = new QToolButton(this);
-    m_viewModeButton->setIcon(QIcon(":/tabview.png"));
+    m_viewModeButton->setIcon(AppIcons::icon("folder", 24));
     m_viewModeButton->setIconSize(QSize(24, 24));
-    m_viewModeButton->setMinimumSize(QSize(36, 36));
-    m_viewModeButton->setMaximumSize(QSize(36, 36));
+    m_viewModeButton->setMinimumSize(QSize(32, 32));
+    m_viewModeButton->setMaximumSize(QSize(32, 32));
     m_viewModeButton->setToolTip(tr("View mode"));
     m_viewModeButton->setCheckable(true);
     uniLay->addWidget(m_viewModeButton);
 
     m_universePageDownButton = new QToolButton(this);
-    m_universePageDownButton->setIcon(QIcon(":/back.png"));
+    m_universePageDownButton->setIcon(AppIcons::icon("chevron-left", 24));
     m_universePageDownButton->setIconSize(QSize(24, 24));
-    m_universePageDownButton->setMinimumSize(QSize(36, 36));
-    m_universePageDownButton->setMaximumSize(QSize(36, 36));
+    m_universePageDownButton->setMinimumSize(QSize(32, 32));
+    m_universePageDownButton->setMaximumSize(QSize(32, 32));
     m_universePageDownButton->setToolTip(tr("Previous page"));
     uniLay->addWidget(m_universePageDownButton);
 
     m_universePageSpin = new QSpinBox(this);
-    m_universePageSpin->setMaximumSize(QSize(40, 34));
+    m_universePageSpin->setMinimumSize(QSize(52, 34));
+    m_universePageSpin->setMaximumSize(QSize(64, 34));
     m_universePageSpin->setButtonSymbols(QAbstractSpinBox::NoButtons);
     m_universePageSpin->setAlignment(Qt::AlignCenter);
     m_universePageSpin->setWrapping(true);
     m_universePageSpin->setToolTip(tr("Current page"));
-    uniLay->addWidget(m_universePageSpin);
+    m_universePageSpin->hide();
+
+    m_universePageEdit = new QLineEdit(this);
+    m_universePageEdit->setAlignment(Qt::AlignCenter);
+    m_universePageEdit->setValidator(new QIntValidator(1, 999, m_universePageEdit));
+    m_universePageEdit->setFixedSize(56, 34);
+    m_universePageEdit->setText("1");
+    m_universePageEdit->setToolTip(tr("Current page"));
+    uniLay->addWidget(m_universePageEdit);
+    connect(m_universePageEdit, &QLineEdit::editingFinished, this, [this]()
+    {
+        bool ok = false;
+        const int page = m_universePageEdit->text().toInt(&ok);
+        if (ok == false)
+        {
+            m_universePageEdit->setText(QString::number(m_universePageSpin->value()));
+            return;
+        }
+        m_universePageSpin->setValue(qBound(m_universePageSpin->minimum(),
+                                           page, m_universePageSpin->maximum()));
+    });
+    connect(m_universePageSpin, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int page)
+    {
+        if (m_universePageEdit != NULL && m_universePageEdit->text().toInt() != page)
+            m_universePageEdit->setText(QString::number(page));
+    });
 
     m_universePageUpButton = new QToolButton(this);
-    m_universePageUpButton->setIcon(QIcon(":/forward.png"));
+    m_universePageUpButton->setIcon(AppIcons::icon("chevron-right", 24));
     m_universePageUpButton->setIconSize(QSize(24, 24));
-    m_universePageUpButton->setMinimumSize(QSize(36, 36));
-    m_universePageUpButton->setMaximumSize(QSize(36, 36));
+    m_universePageUpButton->setMinimumSize(QSize(32, 32));
+    m_universePageUpButton->setMaximumSize(QSize(32, 32));
     m_universePageUpButton->setToolTip(tr("Next page"));
     uniLay->addWidget(m_universePageUpButton);
 
     m_universeResetButton = new QToolButton(this);
-    m_universeResetButton->setIcon(QIcon(":/fileclose.png"));
+    m_universeResetButton->setIcon(AppIcons::icon("x", 24,
+                                                  AppIcons::Destructive));
     m_universeResetButton->setIconSize(QSize(24, 24));
-    m_universeResetButton->setMinimumSize(QSize(36, 36));
-    m_universeResetButton->setMaximumSize(QSize(36, 36));
+    m_universeResetButton->setMinimumSize(QSize(32, 32));
+    m_universeResetButton->setMaximumSize(QSize(32, 32));
     m_universeResetButton->setToolTip(tr("Reset universe"));
     uniLay->addWidget(m_universeResetButton);
 
@@ -268,19 +358,25 @@ void SimpleDesk::initTopSide()
     //m_universesCombo->setFixedWidth(200);
     m_universesCombo->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     uniLay->addWidget(m_universesCombo);
-    lay->addLayout(uniLay);
+    lay->addWidget(actionBar);
 
     initUniversesCombo();
     connect(m_universesCombo, SIGNAL(currentIndexChanged(int)),
             this, SLOT(slotUniversesComboChanged(int)));
 
     m_universeGroup = new QFrame(this);
-    //m_universeGroup->setTitle(tr("Universe"));
+    m_universeGroup->setObjectName("pagePanel");
     QHBoxLayout *grpLay = new QHBoxLayout(m_universeGroup);
-    //m_universeGroup->setFlat(true);
-    grpLay->setContentsMargins(1, 1, 1, 1);
-    grpLay->setSpacing(1);
-    lay->addWidget(m_universeGroup);
+    grpLay->setContentsMargins(4, 4, 4, 4);
+    grpLay->setSpacing(2);
+
+    QScrollArea *universeScroll = new QScrollArea(topSide);
+    universeScroll->setFrameShape(QFrame::NoFrame);
+    universeScroll->setWidgetResizable(true);
+    universeScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    universeScroll->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    universeScroll->setWidget(m_universeGroup);
+    lay->addWidget(universeScroll, 1);
 
     QVBoxLayout *vbox = new QVBoxLayout;
     m_grandMasterSlider = new GrandMasterSlider(this, m_doc->inputOutputMap());
@@ -315,19 +411,19 @@ void SimpleDesk::initBottomSide()
     QHBoxLayout* hbox = new QHBoxLayout;
     hbox->setContentsMargins(0, 0, 0, 0);
     m_previousCueButton = new QToolButton(this);
-    m_previousCueButton->setIcon(QIcon(":/back.png"));
+    m_previousCueButton->setIcon(AppIcons::icon("chevron-left", 32));
     m_previousCueButton->setIconSize(QSize(32, 32));
     m_previousCueButton->setToolTip(tr("Previous cue"));
     hbox->addWidget(m_previousCueButton);
 
     m_stopCueStackButton = new QToolButton(this);
-    m_stopCueStackButton->setIcon(QIcon(":/player_stop.png"));
+    m_stopCueStackButton->setIcon(AppIcons::icon("square", 32));
     m_stopCueStackButton->setIconSize(QSize(32, 32));
     m_stopCueStackButton->setToolTip(tr("Stop cue stack"));
     hbox->addWidget(m_stopCueStackButton);
 
     m_nextCueButton = new QToolButton(this);
-    m_nextCueButton->setIcon(QIcon(":/forward.png"));
+    m_nextCueButton->setIcon(AppIcons::icon("chevron-right", 32));
     m_nextCueButton->setIconSize(QSize(32, 32));
     m_nextCueButton->setToolTip(tr("Next cue"));
     hbox->addWidget(m_nextCueButton);
@@ -335,20 +431,20 @@ void SimpleDesk::initBottomSide()
     hbox->addStretch();
 
     m_cloneCueStackButton = new QToolButton(this);
-    m_cloneCueStackButton->setIcon(QIcon(":/editcopy.png"));
+    m_cloneCueStackButton->setIcon(AppIcons::icon("copy", 32));
     m_cloneCueStackButton->setIconSize(QSize(32, 32));
     m_cloneCueStackButton->setToolTip(tr("Clone cue stack"));
     hbox->addWidget(m_cloneCueStackButton);
 
     m_editCueStackButton = new QToolButton(this);
-    m_editCueStackButton->setIcon(QIcon(":/edit.png"));
+    m_editCueStackButton->setIcon(AppIcons::icon("pencil-line", 32));
     m_editCueStackButton->setIconSize(QSize(32, 32));
     m_editCueStackButton->setToolTip(tr("Edit cue stack"));
     m_editCueStackButton->setCheckable(true);
     hbox->addWidget(m_editCueStackButton);
 
     m_recordCueButton = new QToolButton(this);
-    m_recordCueButton->setIcon(QIcon(":/record.png"));
+    m_recordCueButton->setIcon(AppIcons::icon("circle-dot", 32));
     m_recordCueButton->setIconSize(QSize(32, 32));
     m_recordCueButton->setToolTip(tr("Record cue"));
     hbox->addWidget(m_recordCueButton);
@@ -529,6 +625,8 @@ void SimpleDesk::initUniversePager()
     //qDebug() << Q_FUNC_INFO;
     m_universePageSpin->setRange(1, int((512 + m_channelsPerPage - 1) / m_channelsPerPage));
     m_universePageSpin->setValue(1);
+    if (m_universePageEdit != NULL)
+        m_universePageEdit->setText("1");
     slotUniversePageChanged(1);
 
     connect(m_viewModeButton, SIGNAL(clicked(bool)), this, SLOT(slotViewModeClicked(bool)));
@@ -692,6 +790,8 @@ void SimpleDesk::slotViewModeClicked(bool toggle)
     m_universePageUpButton->setEnabled(!toggle);
     m_universePageDownButton->setEnabled(!toggle);
     m_universePageSpin->setEnabled(!toggle);
+    if (m_universePageEdit != NULL)
+        m_universePageEdit->setEnabled(!toggle);
 }
 
 void SimpleDesk::slotUniversePageUpClicked()
@@ -1438,7 +1538,7 @@ void SimpleDesk::slotCueStackSelectionChanged()
                 btn->setToolTip(tr("Delete cue"));
                 btn->setFlat(true);
                 btn->setFixedSize(m_cueStackView->sizeHintForIndex(index));
-                btn->setIcon(QIcon(":/delete.png"));
+                btn->setIcon(AppIcons::icon("trash-2", 16));
                 m_cueStackView->setIndexWidget(index, btn);
                 m_cueDeleteIconIndex = index;
                 connect(btn, SIGNAL(clicked()), this, SLOT(slotDeleteCueClicked()));

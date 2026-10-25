@@ -348,9 +348,9 @@ QSharedPointer<GenericFader> PathFunction::getFader(QList<Universe*> universes, 
     if (fader.isNull())
     {
         fader = universes[universeID]->requestFader(Universe::Auto);
-        // In Manual mode the Intensity attribute is reused as the path
-        // position, so the lamps must stay at full intensity.
-        fader->adjustIntensity(m_mode == Manual ? 1.0 : getAttributeValue(Intensity));
+        // A path only controls movement. It must never implicitly raise a
+        // fixture's dimmer or shutter, regardless of the selected mode.
+        fader->adjustIntensity(1.0);
         fader->setName(name());
         fader->setParentFunctionID(id());
         m_fadersMap[universeID] = fader;
@@ -427,11 +427,6 @@ void PathFunction::writeFixtures(QList<Universe*> universes, double t)
             fader->updateChannel(doc(), universes[uni], pf.id, pf.tiltCh,
                                  [v](FadeChannel& fc) { fc.setCurrent(v); fc.setTarget(v); });
         }
-        if (pf.dimCh >= 0)
-        {
-            fader->updateChannel(doc(), universes[uni], pf.id, pf.dimCh,
-                                 [](FadeChannel& fc) { fc.setCurrent(255); fc.setTarget(255); });
-        }
     }
 }
 
@@ -473,16 +468,9 @@ int PathFunction::adjustAttribute(qreal fraction, int attributeId)
             // In manual timing a slider (playback) drives the path position.
             setManualPosition(fraction);
         }
-        else
-        {
-            QMapIterator<quint32, QSharedPointer<GenericFader> > it(m_fadersMap);
-            while (it.hasNext())
-            {
-                it.next();
-                if (!it.value().isNull())
-                    it.value()->adjustIntensity(getAttributeValue(Intensity));
-            }
-        }
+        // Do not scale or otherwise write any lamp channel from a path. The
+        // Intensity attribute remains available for manual path positioning.
+
     }
     else if (attrIndex == getAttributeIndex(tr("Position")))
     {

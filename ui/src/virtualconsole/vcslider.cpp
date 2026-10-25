@@ -47,7 +47,9 @@
 #include "universe.h"
 #include "vcslider.h"
 #include "apputil.h"
+#include "appicons.h"
 #include "doc.h"
+#include "theme.h"
 
 /** Number of DMXSource cycles to wait to consider a
  *  playback value change stable */
@@ -62,21 +64,6 @@ const quint8 VCSlider::overrideResetInputSourceId = 1;
 const quint8 VCSlider::flashButtonInputSourceId = 2;
 
 const QSize VCSlider::defaultSize(QSize(60, 200));
-
-const QString submasterStyleSheet =
-    SLIDER_SS_COMMON
-
-    "QSlider::handle:vertical { "
-    "background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #4c4c4c, stop:0.45 #2c2c2c, stop:0.50 #000, stop:0.55 #111111, stop:1 #131313);"
-    "border: 1px solid #5c5c5c;"
-    "border-radius: 4px; margin: 0 -4px; height: 20px; }"
-
-    "QSlider::handle:vertical:hover {"
-    "background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #6c6c6c, stop:0.45 #4c4c4c, stop:0.50 #ffff00, stop:0.55 #313131, stop:1 #333333);"
-    "border: 1px solid #000; }"
-
-    "QSlider::add-page:vertical { background: QLinearGradient( x1: 0, y1: 0, x2: 1, y2: 0, stop: 0 #77DD73, stop: 1 #A5EC98 );"
-    "border: 1px solid #5288A7; margin: 0 9px; }";
 
 /*****************************************************************************
  * Initialization
@@ -140,12 +127,13 @@ VCSlider::VCSlider(QWidget *parent, Doc *doc)
     m_slider->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
     m_slider->setMinimumWidth(32);
     m_slider->setMaximumWidth(80);
-    m_slider->setStyleSheet(CNG_DEFAULT_STYLE);
+    m_slider->setStyleSheet(cngDefaultStyle(m_slider->invertedAppearance()));
 
     connect(m_slider, SIGNAL(valueChanged(int)),
             this, SLOT(slotSliderMoved(int)));
     connect(this, SIGNAL(requestSliderUpdate(int)),
             m_slider, SLOT(setValue(int)));
+    connect(Theme::instance(), &Theme::changed, this, &VCSlider::refreshTheme);
 
     /* Put stretchable space after the slider (to its right side) */
     m_hbox->addStretch();
@@ -480,6 +468,17 @@ VCSlider::SliderMode VCSlider::sliderMode() const
     return m_sliderMode;
 }
 
+void VCSlider::refreshTheme()
+{
+    if (m_slider == NULL || m_widgetMode != WSlider)
+        return;
+
+    if (m_sliderMode == Submaster)
+        m_slider->setStyleSheet(cngSubmasterStyle(m_slider->invertedAppearance()));
+    else
+        m_slider->setStyleSheet(cngDefaultStyle(m_slider->invertedAppearance()));
+}
+
 void VCSlider::setSliderMode(SliderMode mode)
 {
     Q_ASSERT(mode >= Level && mode <= Submaster);
@@ -494,7 +493,7 @@ void VCSlider::setSliderMode(SliderMode mode)
             m_slider->setRange(levelLowLimit(), levelHighLimit());
             m_slider->setValue(levelValue());
             if (m_widgetMode == WSlider)
-                m_slider->setStyleSheet(CNG_DEFAULT_STYLE);
+                m_slider->setStyleSheet(cngDefaultStyle(m_slider->invertedAppearance()));
         }
 
         m_bottomLabel->show();
@@ -522,7 +521,7 @@ void VCSlider::setSliderMode(SliderMode mode)
             m_slider->setRange(0, UCHAR_MAX);
             m_slider->setValue(level);
             if (m_widgetMode == WSlider)
-                m_slider->setStyleSheet(CNG_DEFAULT_STYLE);
+                m_slider->setStyleSheet(cngDefaultStyle(m_slider->invertedAppearance()));
         }
         slotSliderMoved(level);
 
@@ -540,7 +539,7 @@ void VCSlider::setSliderMode(SliderMode mode)
             m_slider->setRange(0, UCHAR_MAX);
             m_slider->setValue(levelValue());
             if (m_widgetMode == WSlider)
-                m_slider->setStyleSheet(submasterStyleSheet);
+                m_slider->setStyleSheet(cngSubmasterStyle(m_slider->invertedAppearance()));
         }
         if (m_doc->mode() == Doc::Operate)
             m_doc->masterTimer()->unregisterDMXSource(this);
@@ -620,7 +619,7 @@ void VCSlider::setChannelsMonitorEnabled(bool enable)
         m_resetButton->setFixedSize(32, 32);
         m_resetButton->setIconSize(QSize(32, 32));
         m_resetButton->setStyle(AppUtil::saneStyle());
-        m_resetButton->setIcon(QIcon(":/fileclose.png"));
+        m_resetButton->setIcon(AppIcons::icon("refresh-cw", 16));
         m_resetButton->setToolTip(tr("Reset channels override"));
         layout()->addWidget(m_resetButton);
         layout()->setAlignment(m_resetButton, Qt::AlignHCenter);
@@ -1060,7 +1059,7 @@ void VCSlider::setPlaybackFlashEnable(bool enable)
         m_flashButton = new FlashButton(this);
         m_flashButton->setIconSize(QSize(32, 32));
         m_flashButton->setStyle(AppUtil::saneStyle());
-        m_flashButton->setIcon(QIcon(":/flash.png"));
+        m_flashButton->setIcon(AppIcons::icon("zap", 16));
         m_flashButton->setToolTip(tr("Flash Function"));
         layout()->addWidget(m_flashButton);
         layout()->setAlignment(m_flashButton, Qt::AlignHCenter);
@@ -1465,7 +1464,7 @@ void VCSlider::setWidgetStyle(SliderWidgetStyle mode)
         m_slider->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
         m_slider->setMinimumWidth(32);
         m_slider->setMaximumWidth(80);
-        m_slider->setStyleSheet(CNG_DEFAULT_STYLE);
+        m_slider->setStyleSheet(cngDefaultStyle(m_slider->invertedAppearance()));
         m_hbox->addStretch();
         m_slider->show();
         connect(m_slider, SIGNAL(valueChanged(int)),

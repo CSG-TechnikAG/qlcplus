@@ -1,0 +1,260 @@
+/*
+  Q Light Controller Plus - application shell styles
+  shell.qss
+
+  This layer is applied for every theme, including Classic, because the
+  navigation rail / command bar are custom widgets. The widget layer
+  (base.qss) is only applied by the modern themes.
+*/
+
+#mainShell
+{
+    background-color: %BG%;
+}
+
+#topBar
+{
+    background-color: %SURFACE%;
+    border-bottom: 1px solid %BORDER%;
+}
+
+#workspaceTitle
+{
+    color: %TEXT%;
+}
+
+#workspaceSubtitle
+{
+    color: %TEXT_DIM%;
+}
+
+#pageHost
+{
+    background-color: %BG%;
+}
+
+QToolBar#commandBar
+{
+    background: transparent;
+    border: none;
+    padding: 0;
+    spacing: 2px;
+}
+
+QToolBar#commandBar::separator
+{
+    background: %BORDER%;
+    width: 1px;
+    margin: 9px 7px;
+}
+
+#commandPaletteCard
+{
+    background-color: %SURFACE2%;
+    border: 1px solid %BORDER_STRONG%;
+    border-radius: %RADIUS_LG%;
+}
+
+QLineEdit#commandSearch
+{
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    padding: 10px 14px;
+    color: %TEXT%;
+}
+
+#commandSeparator
+{
+    color: %BORDER%;
+    background: %BORDER%;
+    max-height: 1px;
+}
+
+QListWidget#commandList
+{
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    padding: 6px;
+    outline: none;
+}
+
+QListWidget#commandList::item
+{
+    padding: 6px 10px;
+    min-height: 24px;
+    border-radius: %RADIUS_SM%;
+    border-left: 2px solid transparent;
+    color: %TEXT%;
+}
+
+QListWidget#commandList::item:hover
+{
+    background: %SURFACE3%;
+}
+
+QListWidget#commandList::item:selected
+{
+    background: %ACCENT_SOFT%;
+    color: %TEXT%;
+    border-left: 2px solid %ACCENT%;
+}
+
+#commandHint
+{
+    color: %TEXT_DIM%;
+    padding: 4px 16px 10px 16px;
+}
+
+/* ------------------------------------------------------------------ */
+/* Component library                                                   */
+/* ------------------------------------------------------------------ */
+
+#appCard
+{
+    background-color: %SURFACE%;
+    border: 1px solid %BORDER%;
+    border-radius: %RADIUS_LG%;
+}
+
+#appCardTitle
+{
+    color: %TEXT%;
+}
+
+#appCardSubtitle
+{
+    color: %TEXT_DIM%;
+}
+
+#appDialog
+{
+    background-color: %BG%;
+}
+
+#appDialogTitle
+{
+    color: %TEXT%;
+}
+
+#appDialogSubtitle
+{
+    color: %TEXT_DIM%;
+}
+
+#appDialogIcon
+{
+    background-color: %ACCENT_FAINT%;
+    border: 1px solid %BORDER%;
+    border-radius: 10px;
+}
+
+#appDialogSeparator,
+#appDialogFooterSeparator
+{
+    background-color: %BORDER%;
+    border: none;
+}
+
+#appDialog QScrollArea
+{
+    background: transparent;
+    border: none;
+}
+
+#appDialog QScrollArea > QWidget > QWidget
+{
+    background: transparent;
+}
+
+#appSettingRow
+{
+    background: transparent;
+}
+
+#appSettingTitle
+{
+    color: %TEXT%;
+}
+
+#appSettingDescription
+{
+    color: %TEXT_DIM%;
+}
+
+#appEmptyState
+{
+    background: transparent;
+}
+
+#appEmptyIcon
+{
+    background-color: %ACCENT_FAINT%;
+    border: 1px solid %BORDER%;
+    border-radius: 18px;
+}
+
+#appEmptyTitle
+{
+    color: %TEXT%;
+}
+
+#appEmptyDescription
+{
+    color: %TEXT_DIM%;
+}
+
+/* ------------------------------------------------------------------ */
+/* Page chrome                                                        */
+/* ------------------------------------------------------------------ */
+
+#pageActionBar,
+#pagePanel
+{
+    background-color: %SURFACE%;
+    border: 1px solid %BORDER%;
+    border-radius: %RADIUS_LG%;
+}
+
+QToolBar#pageToolBar
+{
+    background: transparent;
+    border: none;
+    padding: 0;
+    spacing: 2px;
+}
+
+QToolBar#pageToolBar::separator
+{
+    background: %BORDER%;
+    width: 1px;
+    margin: 8px 6px;
+}
+
+#pageActionBar QToolButton
+{
+    padding: 5px;
+}
+
+QScrollArea#pageCanvas
+{
+    background-color: %BG%;
+    border: 1px solid %BORDER%;
+    border-radius: %RADIUS_LG%;
+}
+
+QScrollArea#pageCanvas > QWidget > QWidget
+{
+    background: transparent;
+}
+
+#bpmBadge
+{
+    color: %ACCENT%;
+    background-color: %ACCENT_SOFT%;
+    border: 1px solid %ACCENT%;
+    border-radius: %RADIUS_SM%;
+    padding: 4px 10px;
+    font-weight: 600;
+}

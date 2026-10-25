@@ -56,10 +56,21 @@ namespace AppUtil
      * Stylesheets
      *********************************************************************/
     /**
+     * Directory that may contain the user supplied qlcplusStyle.qss file
+     */
+    QString userStylesheetDirectory();
+
+    /**
      * Search the requested $component in a pre-determined
      * stylesheet file on disk
      */
     QString getStyleSheet(QString component);
+
+    /**
+     * Forget the cached stylesheet components so the next getStyleSheet()
+     * call reads the file again
+     */
+    void reloadStyleSheets();
 
     /*********************************************************************
      * Digits

@@ -39,7 +39,7 @@
 
 Show::Show(Doc* doc) : Function(doc, Function::ShowType)
     , m_timeDivisionType(Time)
-    , m_timeDivisionBPM(120)
+    , m_timeDivisionBPM(120.0)
     , m_latestTrackId(0)
     , m_latestShowFunctionID(0)
     , m_runner(NULL)
@@ -134,20 +134,24 @@ bool Show::copyFrom(const Function* function)
                 ShowFunction *showFunc = newTrack->createShowFunction(copy->id());
                 showFunc->setStartTime(sfunc->startTime());
                 showFunc->setDuration(sfunc->duration());
+                showFunc->setStretch(sfunc->stretch());
+                showFunc->setFunctionSpeed(sfunc->functionSpeed());
                 showFunc->setColor(sfunc->color());
                 showFunc->setLocked(sfunc->isLocked());
             }
         }
     }
 
-    return Function::copyFrom(function);
+    const bool result = Function::copyFrom(function);
+    prepareRuntimeFunctions(false);
+    return result;
 }
 
 /*********************************************************************
  * Time division
  *********************************************************************/
 
-void Show::setTimeDivision(Show::TimeDivision type, int BPM)
+void Show::setTimeDivision(Show::TimeDivision type, double BPM)
 {
     qDebug() << "[setTimeDivision] type:" << type << ", BPM:" << BPM;
     m_timeDivisionType = type;
@@ -175,12 +179,12 @@ void Show::setTimeDivisionType(TimeDivision type)
     m_timeDivisionType = type;
 }
 
-int Show::timeDivisionBPM() const
+double Show::timeDivisionBPM() const
 {
     return m_timeDivisionBPM;
 }
 
-void Show::setTimeDivisionBPM(int BPM)
+void Show::setTimeDivisionBPM(double BPM)
 {
     m_timeDivisionBPM = BPM;
 }
@@ -372,7 +376,7 @@ bool Show::saveXML(QXmlStreamWriter *doc) const
 
     doc->writeStartElement(KXMLQLCShowTimeDivision);
     doc->writeAttribute(KXMLQLCShowTimeType, tempoToString(m_timeDivisionType));
-    doc->writeAttribute(KXMLQLCShowTimeBPM, QString::number(m_timeDivisionBPM));
+    doc->writeAttribute(KXMLQLCShowTimeBPM, QString::number(m_timeDivisionBPM, 'g', 10));
     doc->writeEndElement();
 
     foreach (Track *track, m_tracks)
@@ -404,7 +408,7 @@ bool Show::loadXML(QXmlStreamReader &root)
         if (root.name() == KXMLQLCShowTimeDivision)
         {
             QString type = root.attributes().value(KXMLQLCShowTimeType).toString();
-            int bpm = root.attributes().value(KXMLQLCShowTimeBPM).toString().toInt();
+            double bpm = root.attributes().value(KXMLQLCShowTimeBPM).toString().toDouble();
             setTimeDivision(stringToTempo(type), bpm);
             root.skipCurrentElement();
         }
@@ -430,6 +434,20 @@ void Show::postLoad()
     {
         if (track->postLoad(doc()))
             doc()->setModified();
+    }
+
+    prepareRuntimeFunctions(false);
+}
+
+void Show::prepareRuntimeFunctions(bool force)
+{
+    if (doc() == NULL)
+        return;
+
+    foreach (Track *track, m_tracks)
+    {
+        foreach (ShowFunction *sf, track->showFunctions())
+            sf->prepareRuntimeFunction(doc(), force);
     }
 }
 

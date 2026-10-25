@@ -102,6 +102,8 @@ bool FixtureScene::isRenderable(Fixture *fx)
     case QLCFixtureDef::Strobe:
     case QLCFixtureDef::Flower:
     case QLCFixtureDef::MovingHead:
+    case QLCFixtureDef::Scanner:
+    case QLCFixtureDef::Laser:
     case QLCFixtureDef::Smoke:
     case QLCFixtureDef::Hazer:
         return true;
@@ -148,6 +150,15 @@ void FixtureScene::updateModel(FixtureInstance &fi, Fixture *fx)
         break;
     case QLCFixtureDef::MovingHead:
         fi.model = FixtureModel::MovingHead;
+        break;
+    case QLCFixtureDef::Scanner:
+        fi.model = FixtureModel::Scanner;
+        break;
+    case QLCFixtureDef::Strobe:
+        fi.model = FixtureModel::Strobe;
+        break;
+    case QLCFixtureDef::Laser:
+        fi.model = FixtureModel::Laser;
         break;
     case QLCFixtureDef::Smoke:
     case QLCFixtureDef::Hazer:
@@ -201,6 +212,15 @@ void FixtureScene::updateModel(FixtureInstance &fi, Fixture *fx)
             break;
         case FixtureModel::MovingHead:
             fi.size = QVector3D(0.30, 0.30, 0.45);
+            break;
+        case FixtureModel::Scanner:
+            fi.size = QVector3D(0.38, 0.30, 0.24);
+            break;
+        case FixtureModel::Strobe:
+            fi.size = QVector3D(0.42, 0.18, 0.20);
+            break;
+        case FixtureModel::Laser:
+            fi.size = QVector3D(0.28, 0.18, 0.16);
             break;
         case FixtureModel::Smoke:
             fi.size = QVector3D(0.45, 0.30, 0.30);   // fog machine chassis

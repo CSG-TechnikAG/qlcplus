@@ -23,6 +23,7 @@
 #include <QGraphicsView>
 #include <QWidget>
 #include <QList>
+#include <QSet>
 
 #include "multitrackview.h"
 #include "sequenceitem.h"
@@ -35,10 +36,11 @@ class QComboBox;
 class QCheckBox;
 class QSplitter;
 class QToolBar;
-class QSpinBox;
+class QDoubleSpinBox;
 class QAction;
 class QLabel;
 class Doc;
+class Audio;
 
 /** @addtogroup ui_shows
  * @{
@@ -115,6 +117,9 @@ protected:
     void initToolbar();
     void updateShowsCombo();
     void updateMultiTrackView();
+    void showTimingsTool(ShowItem *item);
+    void duplicateItem(ShowItem *item);
+    void analyzeAudio(Audio *audio);
 
 private:
     bool checkOverlapping(quint32 startTime, quint32 duration);
@@ -128,6 +133,7 @@ private:
     QAction *m_addAudioAction;
     QAction *m_addVideoAction;
     QAction *m_copyAction;
+    QAction *m_duplicateAction;
     QAction *m_pasteAction;
     QAction *m_deleteAction;
     QAction *m_colorAction;
@@ -137,7 +143,9 @@ private:
     QAction *m_stopAction;
     QAction *m_playAction;
     QComboBox *m_timeDivisionCombo;
-    QSpinBox *m_bpmField;
+    QDoubleSpinBox *m_bpmField;
+    QAction *m_autoBpmAction;
+    QSet<quint32> m_analysisStarted;
 
 protected slots:
     /** Slot called when the user selects a show from
@@ -169,7 +177,8 @@ protected slots:
      *********************************************************************/
 protected slots:
     void slotTimeDivisionTypeChanged(int idx);
-    void slotBPMValueChanged(int value);
+    void slotBPMValueChanged(double value);
+    void slotAutoBpm();
 
     /*********************************************************************
      * UI events
@@ -177,6 +186,7 @@ protected slots:
 protected slots:
     void slotViewClicked(QMouseEvent *event);
     void slotShowItemMoved(ShowItem *item, quint32 time, bool moved);
+    void slotShowItemResized(ShowItem *item);
 
     void slotUpdateTime(quint32 msec_time);
     void slotUpdateTimeAndCursor(quint32 msec_time);
@@ -187,6 +197,9 @@ protected slots:
     void slotChangeColor();
     void slotChangeLock();
     void slotShowTimingsTool();
+    void slotShowItemTimings(ShowItem *item);
+    void slotDuplicateItem();
+    void slotShowItemDuplicate(ShowItem *item);
     void slotShowItemStartTimeChanged(ShowItem *item, int msec);
     void slotShowItemDurationChanged(ShowItem *item, int msec, bool stretch);
     void slotToggleSnapToGrid(bool enable);

@@ -60,12 +60,12 @@ void VideoItem::calculateWidth()
     qint64 video_duration = m_function->duration();
 
     if (video_duration != 0)
-        newWidth = ((50/(float)getTimeScale()) * (float)video_duration) / 1000;
+        newWidth = qRound((50.0 / double(getTimeScale())) * double(video_duration) / 1000.0);
     else
         newWidth = 100;
 
-    if (newWidth < (50 / m_timeScale))
-        newWidth = 50 / m_timeScale;
+    if (newWidth < qRound(50.0 / double(m_timeScale)))
+        newWidth = qRound(50.0 / double(m_timeScale));
     setWidth(newWidth);
 }
 
@@ -107,7 +107,7 @@ void VideoItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
     ShowItem::postPaint(painter);
 }
 
-void VideoItem::setTimeScale(int val)
+void VideoItem::setTimeScale(qreal val)
 {
     ShowItem::setTimeScale(val);
     calculateWidth();

@@ -29,7 +29,9 @@
 #include <QIcon>
 
 #include "playbackslider.h"
+#include "appicons.h"
 #include "clickandgoslider.h"
+#include "theme.h"
 
 PlaybackSlider::PlaybackSlider(QWidget* parent)
     : QWidget(parent)
@@ -46,7 +48,7 @@ PlaybackSlider::PlaybackSlider(QWidget* parent)
 
     /* Select button */
     m_select = new QToolButton(this);
-    m_select->setIcon(QIcon(":/check.png"));
+    m_select->setIcon(AppIcons::icon("scene-check", 16));
     m_select->setIconSize(QSize(32, 32));
     m_select->setToolTip(tr("Select"));
     layout()->addWidget(m_select);
@@ -64,8 +66,9 @@ PlaybackSlider::PlaybackSlider(QWidget* parent)
     m_slider->setRange(0, UCHAR_MAX);
     //m_slider->setTickInterval(16);
     //m_slider->setTickPosition(QSlider::TicksBothSides);
-    m_slider->setFixedWidth(32);
-    m_slider->setSliderStyleSheet(CNG_DEFAULT_STYLE);
+    m_slider->setFixedWidth(36);
+    m_slider->setSliderStyleSheet(cngDefaultStyle(false, 22, 0.78, 24, 18));
+    m_slider->setHandleValueLine(true);
     layout()->addWidget(m_slider);
     layout()->setAlignment(m_slider, Qt::AlignHCenter);
     connect(m_slider, SIGNAL(valueChanged(int)), this, SLOT(slotSliderChanged(int)));
@@ -78,13 +81,14 @@ PlaybackSlider::PlaybackSlider(QWidget* parent)
 
     /* Flash button */
     m_flash = new QToolButton(this);
-    m_flash->setIcon(QIcon(":/flash.png"));
+    m_flash->setIcon(AppIcons::icon("zap", 16));
     m_flash->setIconSize(QSize(32, 32));
     m_flash->setToolTip(tr("Flash"));
     layout()->addWidget(m_flash);
     layout()->setAlignment(m_flash, Qt::AlignHCenter);
     connect(m_flash, SIGNAL(pressed()), this, SLOT(slotFlashPressed()));
     connect(m_flash, SIGNAL(released()), this, SLOT(slotFlashReleased()));
+    connect(Theme::instance(), &Theme::changed, this, &PlaybackSlider::refreshTheme);
 
     slotSliderChanged(0);
 }
@@ -128,6 +132,12 @@ void PlaybackSlider::setSelected(bool sel)
         setPalette(QApplication::palette());
         setAutoFillBackground(false);
     }
+}
+
+void PlaybackSlider::refreshTheme()
+{
+    if (m_slider != NULL)
+        m_slider->setSliderStyleSheet(cngDefaultStyle(false, 22, 0.78, 24, 18));
 }
 
 void PlaybackSlider::slotSliderChanged(int value)

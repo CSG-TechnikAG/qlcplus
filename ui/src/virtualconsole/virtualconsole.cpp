@@ -34,6 +34,8 @@
 #include <QKeyEvent>
 #include <QMenuBar>
 #include <QToolBar>
+#include <QToolButton>
+#include <QHBoxLayout>
 #include <QString>
 #include <QDebug>
 #include <QMenu>
@@ -44,6 +46,8 @@
 #include "addvcslidermatrix.h"
 #include "vcaudiotriggers.h"
 #include "virtualconsole.h"
+#include "appicons.h"
+#include "theme.h"
 #include "vcproperties.h"
 #include "vcspeeddial.h"
 #include "vcsoloframe.h"
@@ -75,6 +79,7 @@ VirtualConsole::VirtualConsole(QWidget* parent, Doc* doc)
 
     , m_editAction(EditNone)
     , m_toolbar(NULL)
+    , m_editBar(NULL)
 
     , m_addActionGroup(NULL)
     , m_editActionGroup(NULL)
@@ -145,12 +150,13 @@ VirtualConsole::VirtualConsole(QWidget* parent, Doc* doc)
 
     /* Main layout */
     new QHBoxLayout(this);
-    layout()->setContentsMargins(1, 1, 1, 1);
-    layout()->setSpacing(1);
+    layout()->setContentsMargins(12, 8, 12, 10);
+    layout()->setSpacing(10);
 
     initActions();
     initDockArea();
     m_contentsLayout = new QVBoxLayout;
+    m_contentsLayout->setSpacing(10);
     layout()->addItem(m_contentsLayout);
     initMenuBar();
     initContents();
@@ -302,49 +308,49 @@ QMenu* VirtualConsole::addMenu() const
 void VirtualConsole::initActions()
 {
     /* Add menu actions */
-    m_addButtonAction = new QAction(QIcon(":/button.png"), tr("New Button"), this);
+    m_addButtonAction = new QAction(AppIcons::icon("vc-button", 26), tr("New Button"), this);
     connect(m_addButtonAction, SIGNAL(triggered(bool)), this, SLOT(slotAddButton()), Qt::QueuedConnection);
 
-    m_addButtonMatrixAction = new QAction(QIcon(":/buttonmatrix.png"), tr("New Button Matrix"), this);
+    m_addButtonMatrixAction = new QAction(AppIcons::icon("vc-buttonmatrix", 26), tr("New Button Matrix"), this);
     connect(m_addButtonMatrixAction, SIGNAL(triggered(bool)), this, SLOT(slotAddButtonMatrix()), Qt::QueuedConnection);
 
-    m_addSliderAction = new QAction(QIcon(":/slider.png"), tr("New Slider"), this);
+    m_addSliderAction = new QAction(AppIcons::icon("vc-slider", 26), tr("New Slider"), this);
     connect(m_addSliderAction, SIGNAL(triggered(bool)), this, SLOT(slotAddSlider()), Qt::QueuedConnection);
 
-    m_addSliderMatrixAction = new QAction(QIcon(":/slidermatrix.png"), tr("New Slider Matrix"), this);
+    m_addSliderMatrixAction = new QAction(AppIcons::icon("vc-slidermatrix", 26), tr("New Slider Matrix"), this);
     connect(m_addSliderMatrixAction, SIGNAL(triggered(bool)), this, SLOT(slotAddSliderMatrix()), Qt::QueuedConnection);
 
-    m_addKnobAction = new QAction(QIcon(":/knob.png"), tr("New Knob"), this);
+    m_addKnobAction = new QAction(AppIcons::icon("vc-knob", 26), tr("New Knob"), this);
     connect(m_addKnobAction, SIGNAL(triggered(bool)), this, SLOT(slotAddKnob()), Qt::QueuedConnection);
 
-    m_addSpeedDialAction = new QAction(QIcon(":/speed.png"), tr("New Speed Dial"), this);
+    m_addSpeedDialAction = new QAction(AppIcons::icon("vc-speeddial", 26), tr("New Speed Dial"), this);
     connect(m_addSpeedDialAction, SIGNAL(triggered(bool)), this, SLOT(slotAddSpeedDial()), Qt::QueuedConnection);
 
-    m_addXYPadAction = new QAction(QIcon(":/xypad.png"), tr("New XY pad"), this);
+    m_addXYPadAction = new QAction(AppIcons::icon("vc-xypad", 26), tr("New XY pad"), this);
     connect(m_addXYPadAction, SIGNAL(triggered(bool)), this, SLOT(slotAddXYPad()), Qt::QueuedConnection);
 
-    m_addCueListAction = new QAction(QIcon(":/cuelist.png"), tr("New Cue list"), this);
+    m_addCueListAction = new QAction(AppIcons::icon("vc-cuelist", 26), tr("New Cue list"), this);
     connect(m_addCueListAction, SIGNAL(triggered(bool)), this, SLOT(slotAddCueList()), Qt::QueuedConnection);
 
-    m_addFrameAction = new QAction(QIcon(":/frame.png"), tr("New Frame"), this);
+    m_addFrameAction = new QAction(AppIcons::icon("vc-frame", 26), tr("New Frame"), this);
     connect(m_addFrameAction, SIGNAL(triggered(bool)), this, SLOT(slotAddFrame()), Qt::QueuedConnection);
 
-    m_addSoloFrameAction = new QAction(QIcon(":/soloframe.png"), tr("New Solo frame"), this);
+    m_addSoloFrameAction = new QAction(AppIcons::icon("vc-soloframe", 26), tr("New Solo frame"), this);
     connect(m_addSoloFrameAction, SIGNAL(triggered(bool)), this, SLOT(slotAddSoloFrame()), Qt::QueuedConnection);
 
-    m_addLabelAction = new QAction(QIcon(":/label.png"), tr("New Label"), this);
+    m_addLabelAction = new QAction(AppIcons::icon("vc-label", 26), tr("New Label"), this);
     connect(m_addLabelAction, SIGNAL(triggered(bool)), this, SLOT(slotAddLabel()), Qt::QueuedConnection);
 
-    m_addAudioTriggersAction = new QAction(QIcon(":/audioinput.png"), tr("New Audio Triggers"), this);
+    m_addAudioTriggersAction = new QAction(AppIcons::icon("vc-audiotriggers", 26), tr("New Audio Triggers"), this);
     connect(m_addAudioTriggersAction, SIGNAL(triggered(bool)), this, SLOT(slotAddAudioTriggers()), Qt::QueuedConnection);
 
-    m_addClockAction = new QAction(QIcon(":/clock.png"), tr("New Clock"), this);
+    m_addClockAction = new QAction(AppIcons::icon("vc-clock", 26), tr("New Clock"), this);
     connect(m_addClockAction, SIGNAL(triggered(bool)), this, SLOT(slotAddClock()), Qt::QueuedConnection);
 
-    m_addAnimationAction = new QAction(QIcon(":/animation.png"), tr("New Animation"), this);
+    m_addAnimationAction = new QAction(AppIcons::icon("vc-animation", 26), tr("New Animation"), this);
     connect(m_addAnimationAction, SIGNAL(triggered(bool)), this, SLOT(slotAddAnimation()), Qt::QueuedConnection);
 
-    m_addStageMapAction = new QAction(QIcon(":/stagemap.png"), tr("New Stage Map"), this);
+    m_addStageMapAction = new QAction(AppIcons::icon("vc-stagemap", 26), tr("New Stage Map"), this);
     connect(m_addStageMapAction, SIGNAL(triggered(bool)), this, SLOT(slotAddStageMap()), Qt::QueuedConnection);
 
     /* Put add actions under the same group */
@@ -367,33 +373,33 @@ void VirtualConsole::initActions()
     m_addActionGroup->addAction(m_addStageMapAction);
 
     /* Tools menu actions */
-    m_toolsSettingsAction = new QAction(QIcon(":/configure.png"), tr("Virtual Console Settings"), this);
+    m_toolsSettingsAction = new QAction(AppIcons::icon("settings-2", 26), tr("Virtual Console Settings"), this);
     connect(m_toolsSettingsAction, SIGNAL(triggered(bool)), this, SLOT(slotToolsSettings()));
     // Prevent this action from ending up to the application menu on OSX
     // and crashing the app after VC window is closed.
     m_toolsSettingsAction->setMenuRole(QAction::NoRole);
 
-    m_functionWizardAction = new QAction(QIcon(":/wizard.png"), tr("VC Fixture Widget Wizard"), this);
+    m_functionWizardAction = new QAction(AppIcons::icon("wand-sparkles", 26), tr("VC Fixture Widget Wizard"), this);
     connect(m_functionWizardAction, SIGNAL(triggered(bool)), this, SLOT(slotWizard()));
 
     /* Edit menu actions */
-    m_editCutAction = new QAction(QIcon(":/editcut.png"), tr("Cut"), this);
+    m_editCutAction = new QAction(AppIcons::icon("scissors", 26), tr("Cut"), this);
     connect(m_editCutAction, SIGNAL(triggered(bool)), this, SLOT(slotEditCut()));
 
-    m_editCopyAction = new QAction(QIcon(":/editcopy.png"), tr("Copy"), this);
+    m_editCopyAction = new QAction(AppIcons::icon("copy", 26), tr("Copy"), this);
     connect(m_editCopyAction, SIGNAL(triggered(bool)), this, SLOT(slotEditCopy()));
 
-    m_editPasteAction = new QAction(QIcon(":/editpaste.png"), tr("Paste"), this);
+    m_editPasteAction = new QAction(AppIcons::icon("clipboard", 26), tr("Paste"), this);
     m_editPasteAction->setEnabled(false);
     connect(m_editPasteAction, SIGNAL(triggered(bool)), this, SLOT(slotEditPaste()));
 
-    m_editDeleteAction = new QAction(QIcon(":/editdelete.png"), tr("Delete"), this);
+    m_editDeleteAction = new QAction(AppIcons::icon("trash-2", 26), tr("Delete"), this);
     connect(m_editDeleteAction, SIGNAL(triggered(bool)), this, SLOT(slotEditDelete()));
 
-    m_editPropertiesAction = new QAction(QIcon(":/edit.png"), tr("Widget Properties"), this);
+    m_editPropertiesAction = new QAction(AppIcons::icon("settings-2", 26), tr("Widget Properties"), this);
     connect(m_editPropertiesAction, SIGNAL(triggered(bool)), this, SLOT(slotEditProperties()));
 
-    m_editRenameAction = new QAction(QIcon(":/editclear.png"), tr("Rename Widget"), this);
+    m_editRenameAction = new QAction(AppIcons::icon("pencil-line", 26), tr("Rename Widget"), this);
     connect(m_editRenameAction, SIGNAL(triggered(bool)), this, SLOT(slotEditRename()));
 
     /* Put edit actions under the same group */
@@ -407,13 +413,13 @@ void VirtualConsole::initActions()
     m_editActionGroup->addAction(m_editRenameAction);
 
     /* Background menu actions */
-    m_bgColorAction = new QAction(QIcon(":/color.png"), tr("Background Color"), this);
+    m_bgColorAction = new QAction(AppIcons::icon("background-color", 26), tr("Background Color"), this);
     connect(m_bgColorAction, SIGNAL(triggered(bool)), this, SLOT(slotBackgroundColor()));
 
-    m_bgImageAction = new QAction(QIcon(":/image.png"), tr("Background Image"), this);
+    m_bgImageAction = new QAction(AppIcons::icon("image", 26), tr("Background Image"), this);
     connect(m_bgImageAction, SIGNAL(triggered(bool)), this, SLOT(slotBackgroundImage()));
 
-    m_bgDefaultAction = new QAction(QIcon(":/undo.png"), tr("Default"), this);
+    m_bgDefaultAction = new QAction(AppIcons::icon("undo-2", 26), tr("Default"), this);
     connect(m_bgDefaultAction, SIGNAL(triggered(bool)), this, SLOT(slotBackgroundNone()));
 
     /* Put BG actions under the same group */
@@ -424,10 +430,10 @@ void VirtualConsole::initActions()
     m_bgActionGroup->addAction(m_bgDefaultAction);
 
     /* Foreground menu actions */
-    m_fgColorAction = new QAction(QIcon(":/fontcolor.png"), tr("Font Colour"), this);
+    m_fgColorAction = new QAction(AppIcons::icon("text-color", 26), tr("Font Colour"), this);
     connect(m_fgColorAction, SIGNAL(triggered(bool)), this, SLOT(slotForegroundColor()));
 
-    m_fgDefaultAction = new QAction(QIcon(":/undo.png"), tr("Default"), this);
+    m_fgDefaultAction = new QAction(AppIcons::icon("undo-2", 26), tr("Default"), this);
     connect(m_fgDefaultAction, SIGNAL(triggered(bool)), this, SLOT(slotForegroundNone()));
 
     /* Put FG actions under the same group */
@@ -437,10 +443,10 @@ void VirtualConsole::initActions()
     m_fgActionGroup->addAction(m_fgDefaultAction);
 
     /* Font menu actions */
-    m_fontAction = new QAction(QIcon(":/fonts.png"), tr("Font"), this);
+    m_fontAction = new QAction(AppIcons::icon("type", 26), tr("Font"), this);
     connect(m_fontAction, SIGNAL(triggered(bool)), this, SLOT(slotFont()));
 
-    m_resetFontAction = new QAction(QIcon(":/undo.png"), tr("Default"), this);
+    m_resetFontAction = new QAction(AppIcons::icon("undo-2", 26), tr("Default"), this);
     connect(m_resetFontAction, SIGNAL(triggered(bool)), this, SLOT(slotResetFont()));
 
     /* Put font actions under the same group */
@@ -450,13 +456,13 @@ void VirtualConsole::initActions()
     m_fontActionGroup->addAction(m_resetFontAction);
 
     /* Frame menu actions */
-    m_frameSunkenAction = new QAction(QIcon(":/framesunken.png"), tr("Sunken"), this);
+    m_frameSunkenAction = new QAction(AppIcons::icon("frame", 26), tr("Sunken"), this);
     connect(m_frameSunkenAction, SIGNAL(triggered(bool)), this, SLOT(slotFrameSunken()));
 
-    m_frameRaisedAction = new QAction(QIcon(":/frameraised.png"), tr("Raised"), this);
+    m_frameRaisedAction = new QAction(AppIcons::icon("layers", 26), tr("Raised"), this);
     connect(m_frameRaisedAction, SIGNAL(triggered(bool)), this, SLOT(slotFrameRaised()));
 
-    m_frameNoneAction = new QAction(QIcon(":/framenone.png"), tr("None"), this);
+    m_frameNoneAction = new QAction(AppIcons::icon("square", 26), tr("None"), this);
     connect(m_frameNoneAction, SIGNAL(triggered(bool)), this, SLOT(slotFrameNone()));
 
     /* Put frame actions under the same group */
@@ -467,10 +473,10 @@ void VirtualConsole::initActions()
     m_frameActionGroup->addAction(m_frameNoneAction);
 
     /* Stacking menu actions */
-    m_stackingRaiseAction = new QAction(QIcon(":/up.png"), tr("Bring to front"), this);
+    m_stackingRaiseAction = new QAction(AppIcons::icon("arrow-up", 26), tr("Bring to front"), this);
     connect(m_stackingRaiseAction, SIGNAL(triggered(bool)), this, SLOT(slotStackingRaise()));
 
-    m_stackingLowerAction = new QAction(QIcon(":/down.png"), tr("Send to back"), this);
+    m_stackingLowerAction = new QAction(AppIcons::icon("arrow-down", 26), tr("Send to back"), this);
     connect(m_stackingLowerAction, SIGNAL(triggered(bool)), this, SLOT(slotStackingLower()));
 
     /* Put stacking actions under the same group */
@@ -558,11 +564,19 @@ void VirtualConsole::initMenuBar()
        widget provides one. */
     m_editMenu->addSeparator();
 
-    /* Toolbar */
-    m_toolbar = new QToolBar(this);
-    m_toolbar->setIconSize(QSize(26,26));
-    m_contentsLayout->addWidget(m_toolbar);
+    /* Page action bar */
+    m_editBar = new QFrame(this);
+    m_editBar->setObjectName("pageActionBar");
+    m_editBar->setFixedHeight(48);
+    QHBoxLayout *barLayout = new QHBoxLayout(m_editBar);
+    barLayout->setContentsMargins(6, 4, 6, 4);
+    barLayout->setSpacing(6);
 
+    m_toolbar = new QToolBar(this);
+    m_toolbar->setObjectName("pageToolBar");
+    m_toolbar->setIconSize(QSize(24, 24));
+    m_toolbar->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
+    m_toolbar->setMinimumWidth(0);
     m_toolbar->addAction(m_addButtonAction);
     m_toolbar->addAction(m_addButtonMatrixAction);
     m_toolbar->addAction(m_addSliderAction);
@@ -582,22 +596,47 @@ void VirtualConsole::initMenuBar()
     m_toolbar->addAction(m_editCutAction);
     m_toolbar->addAction(m_editCopyAction);
     m_toolbar->addAction(m_editPasteAction);
-    m_toolbar->addSeparator();
     m_toolbar->addAction(m_editDeleteAction);
-    m_toolbar->addSeparator();
     m_toolbar->addAction(m_editPropertiesAction);
     m_toolbar->addAction(m_editRenameAction);
-    m_toolbar->addSeparator();
     m_toolbar->addAction(m_stackingRaiseAction);
     m_toolbar->addAction(m_stackingLowerAction);
-    m_toolbar->addSeparator();
     m_toolbar->addAction(m_bgColorAction);
     m_toolbar->addAction(m_bgImageAction);
     m_toolbar->addAction(m_fgColorAction);
     m_toolbar->addAction(m_fontAction);
-    m_toolbar->addSeparator();
     m_toolbar->addAction(m_functionWizardAction);
     m_toolbar->addAction(m_toolsSettingsAction);
+
+    barLayout->addWidget(m_toolbar, 1);
+
+    /* Qt draws the toolbar overflow arrow with the base style; on dark themes
+     * it can be effectively invisible. Use our themed chevron instead. */
+    QToolButton *extButton = m_toolbar->findChild<QToolButton *>("qt_toolbar_ext_button");
+    if (extButton != NULL)
+    {
+        extButton->setArrowType(Qt::NoArrow);
+        extButton->setIcon(AppIcons::icon("chevron-down", 12));
+        extButton->setIconSize(QSize(12, 12));
+    }
+    m_contentsLayout->addWidget(m_editBar);
+
+    /* Keep add-action shortcuts active while they live in the Add menu. */
+    addAction(m_addButtonAction);
+    addAction(m_addButtonMatrixAction);
+    addAction(m_addSliderAction);
+    addAction(m_addSliderMatrixAction);
+    addAction(m_addKnobAction);
+    addAction(m_addSpeedDialAction);
+    addAction(m_addXYPadAction);
+    addAction(m_addCueListAction);
+    addAction(m_addAnimationAction);
+    addAction(m_addStageMapAction);
+    addAction(m_addFrameAction);
+    addAction(m_addSoloFrameAction);
+    addAction(m_addLabelAction);
+    addAction(m_addAudioTriggersAction);
+    addAction(m_addClockAction);
 }
 
 void VirtualConsole::updateCustomMenu()
@@ -1625,6 +1664,7 @@ void VirtualConsole::initContents()
     Q_ASSERT(layout() != NULL);
 
     m_scrollArea = new QScrollArea(this);
+    m_scrollArea->setObjectName("pageCanvas");
     m_contentsLayout->addWidget(m_scrollArea);
     m_scrollArea->setAlignment(Qt::AlignCenter);
     m_scrollArea->setWidgetResizable(false);
@@ -1749,7 +1789,9 @@ void VirtualConsole::enableEdit()
     m_stackingRaiseAction->setShortcut(QKeySequence("SHIFT+UP"));
     m_stackingLowerAction->setShortcut(QKeySequence("SHIFT+DOWN"));
 
-    // Show toolbar
+    // Show page edit chrome
+    if (m_editBar != NULL)
+        m_editBar->show();
     m_toolbar->show();
 }
 
@@ -1802,7 +1844,9 @@ void VirtualConsole::disableEdit()
     m_stackingRaiseAction->setShortcut(QKeySequence());
     m_stackingLowerAction->setShortcut(QKeySequence());
 
-    // Hide toolbar; there's nothing usable there in operate mode
+    // Hide page edit chrome; there's nothing usable there in operate mode
+    if (m_editBar != NULL)
+        m_editBar->hide();
     m_toolbar->hide();
 
     // Make sure the virtual console contents has the focus.

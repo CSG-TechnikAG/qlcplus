@@ -18,6 +18,7 @@
 #include <QSize>
 
 #include "preview3d.h"
+#include "appicons.h"
 #include "preview3dview.h"
 #include "trusspanel.h"
 #include "trussscene.h"
@@ -42,29 +43,38 @@ Preview3D::Preview3D(QWidget *parent, Doc *doc)
     , m_toolbar(NULL)
 {
     QVBoxLayout *layout = new QVBoxLayout(this);
-    layout->setContentsMargins(0, 0, 0, 0);
-    layout->setSpacing(0);
+    layout->setContentsMargins(12, 8, 12, 10);
+    layout->setSpacing(10);
 
-    m_toolbar = new QToolBar(this);
-    m_toolbar->setIconSize(QSize(18, 18));
+    QFrame *actionBar = new QFrame(this);
+    actionBar->setObjectName("pageActionBar");
+    actionBar->setFixedHeight(48);
+    QHBoxLayout *barLayout = new QHBoxLayout(actionBar);
+    barLayout->setContentsMargins(6, 4, 6, 4);
+    barLayout->setSpacing(6);
+
+    m_toolbar = new QToolBar(actionBar);
+    m_toolbar->setObjectName("pageToolBar");
+    m_toolbar->setIconSize(QSize(24, 24));
     m_toolbar->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
-    layout->addWidget(m_toolbar);
+    barLayout->addWidget(m_toolbar);
+    layout->addWidget(actionBar);
 
-    m_fitAction = m_toolbar->addAction(QIcon(":/fittoroom.png"), tr("Fit to room"));
+    m_fitAction = m_toolbar->addAction(AppIcons::icon("maximize", 24), tr("Fit to room"));
     m_fitAction->setToolTip(tr("Frame the whole room"));
     connect(m_fitAction, &QAction::triggered, this, &Preview3D::slotFit);
 
-    m_resetAction = m_toolbar->addAction(QIcon(":/refresh.png"), tr("Reset view"));
+    m_resetAction = m_toolbar->addAction(AppIcons::icon("refresh-cw", 24), tr("Reset view"));
     m_resetAction->setToolTip(tr("Restore the default camera"));
     connect(m_resetAction, &QAction::triggered, this, &Preview3D::slotReset);
 
-    m_gridAction = m_toolbar->addAction(QIcon(":/grid.png"), tr("Grid"));
+    m_gridAction = m_toolbar->addAction(AppIcons::icon("grid-3x3", 24), tr("Grid"));
     m_gridAction->setCheckable(true);
     m_gridAction->setChecked(true);
     m_gridAction->setToolTip(tr("Show or hide the floor grid"));
     connect(m_gridAction, &QAction::toggled, this, &Preview3D::slotGridToggled);
 
-    m_beamPreviewAction = m_toolbar->addAction(QIcon(":/intensity.png"), tr("Beam preview"));
+    m_beamPreviewAction = m_toolbar->addAction(AppIcons::icon("fixtures", 24), tr("Beam preview"));
     m_beamPreviewAction->setCheckable(true);
     m_beamPreviewAction->setChecked(false);
     m_beamPreviewAction->setToolTip(tr("Show static beams in design mode"));
@@ -72,12 +82,12 @@ Preview3D::Preview3D(QWidget *parent, Doc *doc)
 
     m_toolbar->addSeparator();
 
-    m_trussAction = m_toolbar->addAction(QIcon(":/truss.png"), tr("Truss"));
+    m_trussAction = m_toolbar->addAction(AppIcons::icon("frame", 24), tr("Truss"));
     m_trussAction->setCheckable(true);
     m_trussAction->setToolTip(tr("Show or hide the truss configuration panel"));
     connect(m_trussAction, &QAction::toggled, this, &Preview3D::slotTrussToggled);
 
-    m_fixtureAction = m_toolbar->addAction(QIcon(":/fixture.png"), tr("Fixtures"));
+    m_fixtureAction = m_toolbar->addAction(AppIcons::icon("fixtures", 24), tr("Fixtures"));
     m_fixtureAction->setCheckable(true);
     m_fixtureAction->setToolTip(tr("Show or hide the fixture placement panel"));
     connect(m_fixtureAction, &QAction::toggled, this, &Preview3D::slotFixtureToggled);
@@ -91,6 +101,8 @@ Preview3D::Preview3D(QWidget *parent, Doc *doc)
     m_toolbar->addWidget(m_infoLabel);
 
     m_splitter = new QSplitter(Qt::Horizontal, this);
+    m_splitter->setObjectName("pagePanel");
+    layout->addWidget(m_splitter);
     m_view = new Preview3DView(m_splitter);
     m_splitter->addWidget(m_view);
 
@@ -162,6 +174,9 @@ void Preview3D::clearContents()
 
 void Preview3D::slotTrussSceneChanged()
 {
+    if (m_view != NULL)
+        m_view->invalidateOccluders();
+
     // Only real user edits mark the project dirty; loading/clearing does not.
     if (m_loading)
         return;

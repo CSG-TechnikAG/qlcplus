@@ -30,10 +30,16 @@
 #include <QDebug>
 #include <QFile>
 #include <QDir>
+#include <QStyledItemDelegate>
+#include <QStyleOptionViewItem>
+#include <QPainter>
+#include <QPainterPath>
+#include <QModelIndex>
 
 #include "qlcinputprofile.h"
 #include "qlcioplugin.h"
 #include "qlcfile.h"
+#include "theme.h"
 
 #include "inputoutputpatcheditor.h"
 #include "inputprofileeditor.h"
@@ -61,6 +67,106 @@
 #define KProfileColumnName 0
 #define KProfileColumnType 1
 
+namespace
+{
+
+/* QTreeView draws its own tiny check indicator.  The mapping tables need a
+ * larger, theme-aware checkbox that is easy to hit and has a clean tick. */
+class MappingCheckDelegate final : public QStyledItemDelegate
+{
+public:
+    explicit MappingCheckDelegate(QObject *parent = NULL)
+        : QStyledItemDelegate(parent) {}
+
+    void paint(QPainter *painter, const QStyleOptionViewItem &option,
+               const QModelIndex &index) const override
+    {
+        QStyleOptionViewItem opt(option);
+        initStyleOption(&opt, index);
+
+        const bool hasCheck = index.data(Qt::CheckStateRole).isValid();
+        if (hasCheck == true)
+            opt.features &= ~QStyleOptionViewItem::HasCheckIndicator;
+
+        if (hasCheck == false)
+        {
+            QStyledItemDelegate::paint(painter, opt, index);
+            return;
+        }
+
+        /* Mapping tables use check-only columns.  Draw the row background
+         * and our larger checkbox here instead of letting the base delegate
+         * paint its tiny indicator as well. */
+        if (opt.text.isEmpty() == false)
+        {
+            QStyledItemDelegate::paint(painter, opt, index);
+            return;
+        }
+
+        QColor rowBg = option.palette.color(QPalette::Base);
+        if (option.state & QStyle::State_Selected)
+            rowBg = option.palette.color(QPalette::Highlight);
+        else if (option.features & QStyleOptionViewItem::Alternate)
+            rowBg = option.palette.color(QPalette::AlternateBase);
+        painter->fillRect(option.rect, rowBg);
+
+        Theme *theme = Theme::instance();
+        const bool enabled = (option.state & QStyle::State_Enabled) != 0;
+        const Qt::CheckState state = static_cast<Qt::CheckState>
+                                     (index.data(Qt::CheckStateRole).toInt());
+        const QColor accent = theme->accent();
+        const QColor border = theme->color(Theme::BorderStrong);
+        const QColor surface = theme->color(Theme::Surface);
+        const QColor disabled = theme->color(Theme::TextDisabled);
+
+        int side = qMin(20, option.rect.height() - 2);
+        if (side < 10)
+            side = 20;
+        QRect box(option.rect.left() + 20,
+                  option.rect.center().y() - side / 2,
+                  side, side);
+        if (box.right() > option.rect.right() - 2)
+            box.moveLeft(option.rect.right() - side - 2);
+
+        QColor fill = (state == Qt::Checked) ? accent : surface;
+        QColor stroke = (state == Qt::Checked) ? accent : border;
+        if (enabled == false)
+        {
+            fill = theme->color(Theme::SurfaceRaised);
+            stroke = theme->color(Theme::Border);
+        }
+
+        painter->save();
+        painter->setRenderHint(QPainter::Antialiasing, true);
+        painter->setPen(QPen(stroke, 1.2));
+        painter->setBrush(fill);
+        painter->drawRoundedRect(QRectF(box).adjusted(0.5, 0.5, -0.5, -0.5), 4.0, 4.0);
+
+        if (state != Qt::Unchecked)
+        {
+            const QColor check = enabled ? Theme::contrastingText(accent) : disabled;
+            painter->setPen(QPen(check, 2.0, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+            painter->setBrush(Qt::NoBrush);
+            QPainterPath path;
+            if (state == Qt::PartiallyChecked)
+            {
+                path.moveTo(box.left() + box.width() * 0.28, box.center().y());
+                path.lineTo(box.right() - box.width() * 0.28, box.center().y());
+            }
+            else
+            {
+                path.moveTo(box.left() + box.width() * 0.24, box.center().y());
+                path.lineTo(box.left() + box.width() * 0.43, box.bottom() - box.height() * 0.28);
+                path.lineTo(box.right() - box.width() * 0.22, box.top() + box.height() * 0.30);
+            }
+            painter->drawPath(path);
+        }
+        painter->restore();
+    }
+};
+
+} // namespace
+
 InputOutputPatchEditor::InputOutputPatchEditor(QWidget* parent, quint32 universe, InputOutputMap *ioMap, Doc *doc)
     : QWidget(parent)
     , m_ioMap(ioMap)
@@ -79,6 +185,9 @@ InputOutputPatchEditor::InputOutputPatchEditor(QWidget* parent, quint32 universe
     Q_ASSERT(ioMap != NULL);
 
     setupUi(this);
+
+    m_mapTree->setItemDelegate(new MappingCheckDelegate(m_mapTree));
+    m_audioMapTree->setItemDelegate(new MappingCheckDelegate(m_audioMapTree));
 
     m_infoBrowser->setOpenExternalLinks(true);
     m_infoBrowser->setFixedHeight(250);

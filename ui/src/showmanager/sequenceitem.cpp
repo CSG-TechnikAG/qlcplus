@@ -20,6 +20,7 @@
 #include <QApplication>
 #include <QPainter>
 #include <QMenu>
+#include <qmath.h>
 
 #include "sequenceitem.h"
 #include "chaserstep.h"
@@ -49,7 +50,7 @@ SequenceItem::SequenceItem(Chaser *seq, ShowFunction *func)
 void SequenceItem::calculateWidth()
 {
     int newWidth = 0;
-    quint32 seq_duration = m_chaser->totalDuration();
+    quint32 seq_duration = getDuration();
     float timeUnit = 50.0 / float(getTimeScale());
 
     if (seq_duration == Function::infiniteSpeed())
@@ -59,10 +60,10 @@ void SequenceItem::calculateWidth()
     else
     {
         if (seq_duration != 0)
-            newWidth = (timeUnit * float(seq_duration)) / 1000.0;
+            newWidth = qRound((timeUnit * float(seq_duration)) / 1000.0);
 
-        if (newWidth < timeUnit)
-            newWidth = timeUnit;
+        if (newWidth < qRound(timeUnit))
+            newWidth = qRound(timeUnit);
     }
     setWidth(newWidth);
 }
@@ -72,6 +73,15 @@ void SequenceItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *opti
     float xpos = 0;
     float timeUnit = 50.0 / float(m_timeScale);
     int stepIdx = 0;
+
+    const quint32 sourceDuration = m_chaser->totalDuration();
+    const quint32 clipDuration = getDuration();
+    float timingScale = 1.0f;
+    if (sourceDuration > 0 && sourceDuration != Function::infiniteSpeed() &&
+        clipDuration > 0 && clipDuration != Function::infiniteSpeed())
+    {
+        timingScale = float(clipDuration) / float(sourceDuration);
+    }
 
     ShowItem::paint(painter, option, widget);
 
@@ -98,7 +108,7 @@ void SequenceItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *opti
         // draw fade in line
         if (stepFadeIn > 0)
         {
-            int fadeXpos = xpos + ((timeUnit * (float)stepFadeIn) / 1000);
+            int fadeXpos = xpos + ((timeUnit * (float)stepFadeIn * timingScale) / 1000);
             // doesn't even draw it if too small
             if (fadeXpos - xpos > 5)
             {
@@ -106,7 +116,7 @@ void SequenceItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *opti
                 painter->drawLine(xpos, TRACK_HEIGHT - 4, fadeXpos, 1);
             }
         }
-        float stepWidth = ((timeUnit * (float)stepDuration) / 1000);
+        float stepWidth = ((timeUnit * (float)stepDuration * timingScale) / 1000);
         // draw selected step
         if (stepIdx == m_selectedStep)
         {
@@ -127,7 +137,7 @@ void SequenceItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *opti
         // draw fade out line
         if (stepFadeOut > 0)
         {
-            int fadeXpos = xpos + ((timeUnit * (float)stepFadeOut) / 1000);
+            int fadeXpos = xpos + ((timeUnit * (float)stepFadeOut * timingScale) / 1000);
             // doesn't even draw it if too small
             if (fadeXpos - xpos > 5)
             {
@@ -141,7 +151,7 @@ void SequenceItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *opti
     ShowItem::postPaint(painter);
 }
 
-void SequenceItem::setTimeScale(int val)
+void SequenceItem::setTimeScale(qreal val)
 {
     ShowItem::setTimeScale(val);
     calculateWidth();
@@ -150,7 +160,19 @@ void SequenceItem::setTimeScale(int val)
 void SequenceItem::setDuration(quint32 msec, bool stretch)
 {
     Q_UNUSED(stretch)
-    m_chaser->setTotalDuration(msec);
+    /* Sequences are always stretched to the clip duration. This happens on
+     * a runtime copy, so the source Sequence is never modified. */
+    ShowItem::setDuration(msec, true);
+    prepareGeometryChange();
+    calculateWidth();
+    update();
+}
+
+quint32 SequenceItem::getDuration() const
+{
+    if (m_function != NULL && m_function->duration() > 0)
+        return m_function->duration();
+    return m_chaser->totalDuration();
 }
 
 QString SequenceItem::functionName() const
@@ -174,9 +196,9 @@ Chaser *SequenceItem::getChaser() const
 void SequenceItem::slotSequenceChanged(quint32)
 {
     prepareGeometryChange();
-    calculateWidth();
-    if (m_function)
+    if (m_function != NULL && m_function->duration() == 0)
         m_function->setDuration(m_chaser->totalDuration());
+    calculateWidth();
     updateTooltip();
 }
 

@@ -21,11 +21,13 @@
 #include <QXmlStreamWriter>
 #include <QElapsedTimer>
 #include <QDebug>
+#include <QSet>
 #include <math.h>
 
 #include "channelmodifier.h"
 #include "inputoutputmap.h"
 #include "genericfader.h"
+#include "fadechannel.h"
 #include "qlcioplugin.h"
 #include "outputpatch.h"
 #include "grandmaster.h"
@@ -323,6 +325,7 @@ void Universe::processFaders(uint elapsedMs)
     zeroIntensityChannels();
 
     QList<QSharedPointer<GenericFader>> activeFaders;
+    QList<QSharedPointer<GenericFader>> removedFaders;
     {
         QMutexLocker fadersLocker(&m_fadersMutex);
         activeFaders.reserve(m_faders.size());
@@ -337,16 +340,51 @@ void Universe::processFaders(uint elapsedMs)
             // and it's not fading out
             if (fader->deleteRequested() && !fader->isFadingOut())
             {
-                fader->removeAll();
+                removedFaders.append(fader);
                 it.remove();
-                fader.clear();
                 continue;
             }
 
-            if (fader->isEnabled() == false)
-                continue;
+            if (fader->isEnabled() == true)
+                activeFaders.append(fader);
+        }
+    }
 
-            activeFaders.append(fader);
+    /* A removed function fader must release the channels it was driving.
+     * Otherwise non-intensity channels (colour, position, shutter, ...) keep
+     * their last written value forever. Only clear channels that no remaining
+     * fader is still responsible for. */
+    if (removedFaders.isEmpty() == false)
+    {
+        QSet<quint32> remainingChannels;
+        for (const QSharedPointer<GenericFader> &fader : activeFaders)
+        {
+            const QHash<quint32, FadeChannel> channels = fader->channels();
+            for (const FadeChannel &fc : channels)
+            {
+                const quint32 base = fc.addressInUniverse();
+                if (base == QLCChannel::invalid())
+                    continue;
+                for (int i = 0; i < fc.channelCount() && (base + i) < UNIVERSE_SIZE; ++i)
+                    remainingChannels.insert(base + i);
+            }
+        }
+
+        for (const QSharedPointer<GenericFader> &fader : removedFaders)
+        {
+            const QHash<quint32, FadeChannel> channels = fader->channels();
+            for (const FadeChannel &fc : channels)
+            {
+                const quint32 base = fc.addressInUniverse();
+                if (base == QLCChannel::invalid())
+                    continue;
+                for (int i = 0; i < fc.channelCount() && (base + i) < UNIVERSE_SIZE; ++i)
+                {
+                    if (remainingChannels.contains(base + i) == false)
+                        reset(int(base + i), 1);
+                }
+            }
+            fader->removeAll();
         }
     }
 

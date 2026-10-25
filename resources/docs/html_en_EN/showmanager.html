@@ -95,7 +95,7 @@ The main differences are:
  </TR>
  <TR>
   <TD><IMG SRC="qrc:/edit_add.png"/></TD>
-  <TD>CTRL+N</TD>
+  <TD>CTRL+SHIFT+N</TD>
   <TD>Create a new track or add existing functions to the Show. When clicking on this button
   a window is displayed, allowing you to perform the following operations:
   <ul>
@@ -152,6 +152,13 @@ The main differences are:
   <TD>Copy the currently selected item into QLC+ clipboard</TD>
  </TR>
  <TR>
+  <TD><IMG SRC="qrc:/editcopy.png"/></TD>
+  <TD>CTRL+SHIFT+D</TD>
+  <TD>Duplicate the selected clip on the same track. The copy keeps the clip duration,
+  BPM speed override, stretch mode and color, but is placed at the next free position
+  after the original clip and is unlocked.</TD>
+ </TR>
+ <TR>
   <TD><IMG SRC="qrc:/editpaste.png"/></TD>
   <TD>CTRL+V</TD>
   <TD>Paste QLC+ clipboard content at the cursor position. When performing this
@@ -190,14 +197,23 @@ The main differences are:
       On Audio and Video items it does nothing.<br>
       On Sequences and Chasers it will stretch all the steps timings to fit to the desired duration.<br>
       On EFXs and RGB Matrices some extra options will be displayed, allowing to stretch the original function
-      or loop the function until the desired duration is reached.</TD>
+      or loop the function until the desired duration is reached.<br>
+      When the Show uses a BPM time division, a <B>BPM duration</B> section is displayed too. Choose a
+      musical division (for example 1 beat, 1 bar or 4 bars) and click <B>Apply</B> to size the item.
+      The <B>&#8722;</B> and <B>+</B> buttons shorten or extend the total duration to the previous or next division.<br>
+      For RGB Matrices and EFX functions a <B>BPM function speed</B> section is also available: it sets
+      the matrix step or EFX loop length to a musical division and extends the item to complete passes.
+      Choose <B>Function default</B> to return the clip to the source function speed.<br>
+      Duration and speed overrides belong to the individual clip, so the same source function can be
+      reused in several clips with different timings without changing the original function.</TD>
  </TR>
  <TR>
   <TD><IMG SRC="qrc:/grid.png"/></TD>
   <TD>CTRL+G</TD>
   <TD>Enable/disable the "Snap to grid" functionality. The view will be filled with vertical bars
   corresponding to the header markers (time or BPM)<br>
-  Snapping to grid will correct your items by dragging them to the nearest reference bar</TD>
+  Snapping to grid will correct your items by dragging them, or their right edge to change the duration,
+  to the nearest reference bar. Selected items show a resize handle on their right edge.</TD>
  </TR>
  <TR></TR>
  <TR>

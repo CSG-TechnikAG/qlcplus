@@ -33,6 +33,8 @@ void ShowFunction_Test::defaults()
     QVERIFY(sf.functionID() == Function::invalidId());
     QVERIFY(sf.startTime() == UINT_MAX);
     QVERIFY(sf.duration() == 0);
+    QCOMPARE(sf.stretch(), false);
+    QCOMPARE(sf.functionSpeed(), quint32(0));
     QCOMPARE(sf.color(), QColor::Invalid);
     QCOMPARE(sf.isLocked(), false);
     QVERIFY(sf.intensityOverrideId() == -1);
@@ -48,6 +50,8 @@ void ShowFunction_Test::defaults()
     sf.setFunctionID(123);
     sf.setStartTime(445566);
     sf.setDuration(778899);
+    sf.setStretch(true);
+    sf.setFunctionSpeed(500);
     sf.setColor(QColor(Qt::red));
     sf.setLocked(true);
     sf.setIntensityOverrideId(468);
@@ -55,6 +59,8 @@ void ShowFunction_Test::defaults()
     QVERIFY(sf.functionID() == 123);
     QVERIFY(sf.startTime() == 445566);
     QVERIFY(sf.duration() == 778899);
+    QCOMPARE(sf.stretch(), true);
+    QCOMPARE(sf.functionSpeed(), quint32(500));
     QCOMPARE(sf.color(), QColor(Qt::red));
     QCOMPARE(sf.isLocked(), true);
     QCOMPARE(sf.intensityOverrideId(), 468);
@@ -70,6 +76,8 @@ void ShowFunction_Test::load()
     xmlWriter.writeAttribute("ID", "321");
     xmlWriter.writeAttribute("StartTime", "665544");
     xmlWriter.writeAttribute("Duration", "998877");
+    xmlWriter.writeAttribute("Stretch", "1");
+    xmlWriter.writeAttribute("Speed", "450");
     xmlWriter.writeAttribute("Color", "#AABBCC");
     xmlWriter.writeAttribute("Locked", "1");
     xmlWriter.writeEndElement();
@@ -88,6 +96,8 @@ void ShowFunction_Test::load()
     QVERIFY(sf.functionID() == 321);
     QVERIFY(sf.startTime() == 665544);
     QVERIFY(sf.duration() == 998877);
+    QCOMPARE(sf.stretch(), true);
+    QCOMPARE(sf.functionSpeed(), quint32(450));
     QCOMPARE(sf.color(), QColor(0xAA, 0xBB, 0xCC));
     QCOMPARE(sf.isLocked(), true);
 }
@@ -98,6 +108,8 @@ void ShowFunction_Test::save()
     sf.setFunctionID(123);
     sf.setStartTime(445566);
     sf.setDuration(778899);
+    sf.setStretch(true);
+    sf.setFunctionSpeed(500);
     sf.setColor(QColor(Qt::red));
     sf.setLocked(true);
     sf.setIntensityOverrideId(468);
@@ -120,6 +132,8 @@ void ShowFunction_Test::save()
     QVERIFY(xmlReader.attributes().value("ID").toString() == "123");
     QVERIFY(xmlReader.attributes().value("StartTime").toString() == "445566");
     QVERIFY(xmlReader.attributes().value("Duration").toString() == "778899");
+    QVERIFY(xmlReader.attributes().value("Stretch").toString() == "1");
+    QVERIFY(xmlReader.attributes().value("Speed").toString() == "500");
     QVERIFY(xmlReader.attributes().value("Color").toString() == "#ff0000");
     QVERIFY(xmlReader.attributes().value("Locked").toString() == "1");
 }

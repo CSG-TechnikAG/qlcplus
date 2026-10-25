@@ -39,15 +39,18 @@
 #include "flowlayout.h"
 #include "rgbmatrix.h"
 #include "vcmatrix.h"
+#include "theme.h"
 #include "function.h"
 #include "rgbtext.h"
 #include "doc.h"
 
 #define UPDATE_TIMEOUT 50
 
-static const QString controlBtnSS = "QPushButton { background-color: %1; height: 32px; border: 2px solid #6A6A6A; border-radius: 5px; }"
-                                    "QPushButton:pressed { border: 2px solid #0000FF; }"
-                                    "QPushButton:disabled { border: 2px solid #BBBBBB; color: #8f8f8f }";
+static const QString controlBtnSS = "QPushButton { background-color: %1; height: 32px; "
+                                    "border: 1px solid palette(mid); border-radius: 6px; }"
+                                    "QPushButton:pressed { border-color: palette(highlight); }"
+                                    "QPushButton:disabled { border-color: palette(mid); "
+                                    "color: palette(mid); }";
 
 const QSize VCMatrix::defaultSize(QSize(160, 120));
 
@@ -67,11 +70,16 @@ VCMatrix::VCMatrix(QWidget *parent, Doc *doc)
     //hBox->setSpacing(5);
 
     m_slider = new ClickAndGoSlider();
-    m_slider->setSliderStyleSheet(CNG_DEFAULT_STYLE);
+    m_slider->setSliderStyleSheet(cngDefaultStyle());
     m_slider->setFixedWidth(32);
     m_slider->setRange(0, 255);
     m_slider->setPageStep(1);
     m_slider->setInvertedAppearance(false);
+    connect(Theme::instance(), &Theme::changed, this, [this]()
+    {
+        if (m_slider != NULL)
+            m_slider->setSliderStyleSheet(cngDefaultStyle());
+    });
     hBox->addWidget(m_slider);
 
     connect(m_slider, SIGNAL(valueChanged(int)),

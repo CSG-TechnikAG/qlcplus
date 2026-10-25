@@ -77,21 +77,21 @@ public:
     Q_ENUM(TimeDivision)
 
     /** Set the show time division type (Time, BPM) */
-    void setTimeDivision(Show::TimeDivision type, int BPM);
+    void setTimeDivision(Show::TimeDivision type, double BPM);
 
     Show::TimeDivision timeDivisionType() const;
     void setTimeDivisionType(Show::TimeDivision type);
     int beatsDivision() const;
 
-    int timeDivisionBPM() const;
-    void setTimeDivisionBPM(int BPM);
+    double timeDivisionBPM() const;
+    void setTimeDivisionBPM(double BPM);
 
     static QString tempoToString(Show::TimeDivision type);
     static Show::TimeDivision stringToTempo(const QString& tempo);
 
 private:
     TimeDivision m_timeDivisionType;
-    int m_timeDivisionBPM;
+    double m_timeDivisionBPM;
 
     /*********************************************************************
      * Tracks
@@ -172,6 +172,11 @@ public:
     void postLoad() override;
 
 public:
+    /** Prepare the private per-clip Functions used by runtime overrides.
+     *  This must be called from the UI/document thread, never from the
+     *  MasterTimer thread. */
+    void prepareRuntimeFunctions(bool force = false);
+
     /** @reimp */
     bool contains(quint32 functionId) const override;
 

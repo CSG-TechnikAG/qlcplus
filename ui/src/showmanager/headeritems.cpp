@@ -20,6 +20,7 @@
 #include <QPainter>
 
 #include "headeritems.h"
+#include "theme.h"
 
 /****************************************************************************
  *
@@ -31,7 +32,7 @@ ShowHeaderItem::ShowHeaderItem(int width)
     , m_height(HEADER_HEIGHT)
     , m_timeStep(HALF_SECOND_WIDTH)
     , m_timeHit(2)
-    , m_timeScale(3)
+    , m_timeScale(3.0)
     , m_BPMValue(120)
     , m_type(Show::Time)
 {
@@ -54,44 +55,55 @@ void ShowHeaderItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *op
     Q_UNUSED(widget);
 
     // draw base background
-    painter->setPen(QPen(QColor(100, 100, 100, 255), 1));
-    painter->setBrush(QBrush(QColor(150, 150, 150, 255)));
+    Theme *theme = Theme::instance();
+    const QColor border = theme->color(Theme::Border);
+    const QColor text = theme->color(Theme::Text);
+    const QColor dim = theme->color(Theme::TextDim);
+    painter->setPen(QPen(border, 1));
+    painter->setBrush(QBrush(theme->color(Theme::SurfaceRaised)));
     painter->drawRect(0, 0, m_width, 35);
 
     if (m_type > Show::Time)
-        m_timeStep = ((float)(120 * HALF_SECOND_WIDTH) / (float)m_BPMValue) / (float)m_timeScale;
+        updateTimeStep();
 
     // draw vertical timing lines and time labels
     int tmpSec = 0;
     for (int i = 0; i < m_width / m_timeStep; i++)
     {
-        float xpos = ((float)i * m_timeStep) + 1;
-        painter->setPen(QPen(QColor(250, 250, 250, 255), 1));
+        float xpos = (float)i * m_timeStep;
+        painter->setPen(QPen(dim, 1));
         if (i%m_timeHit == 0)
         {
             painter->drawLine(xpos, 20, xpos, 34);
             if (m_height > HEADER_HEIGHT)
             {
-                painter->setPen(QPen(QColor(105, 105, 105, 255), 1));
+                painter->setPen(QPen(border, 1));
                 painter->drawLine(xpos, HEADER_HEIGHT, xpos, m_height);
             }
-            painter->setPen(QPen(Qt::black, 1));
+            painter->setPen(QPen(text, 1));
+            const int labelX = qMax(1, int(xpos) - 4);
             if (m_type == Show::Time)
             {
-                tmpSec = (i/2) * m_timeScale;
-                if (tmpSec < 60)
-                    painter->drawText(xpos - 4, 15, QString("%1s").arg(tmpSec));
+                const qreal seconds = (i / 2.0) * m_timeScale;
+                if (seconds < 60.0)
+                {
+                    const int precision = (m_timeScale < 1.0) ? 1 : 0;
+                    painter->drawText(labelX, 15,
+                                      QString("%1s").arg(QString::number(seconds, 'f', precision)));
+                }
                 else
                 {
-                    int tmpMin = tmpSec / 60;
-                    tmpSec = tmpSec - (tmpMin * 60);
-                    painter->drawText(xpos - 4, 15, QString("%1m%2s").arg(tmpMin).arg(tmpSec));
+                    const int totalSeconds = qRound(seconds);
+                    const int tmpMin = totalSeconds / 60;
+                    const int remSeconds = totalSeconds - (tmpMin * 60);
+                    painter->drawText(labelX, 15,
+                                      QString("%1m%2s").arg(tmpMin).arg(remSeconds));
                 }
             }
             else
             {
                 tmpSec++;
-                painter->drawText(xpos - 4, 15, QString("%1").arg(tmpSec));
+                painter->drawText(labelX, 15, QString("%1").arg(tmpSec));
             }
         }
         else
@@ -101,7 +113,7 @@ void ShowHeaderItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *op
                 painter->drawLine(xpos, 25, xpos, 34);
                 if (m_height > HEADER_HEIGHT)
                 {
-                    painter->setPen(QPen(QColor(105, 105, 105, 255), 1));
+                    painter->setPen(QPen(border, 1));
                     painter->drawLine(xpos, HEADER_HEIGHT, xpos, m_height);
                 }
             }
@@ -110,13 +122,22 @@ void ShowHeaderItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *op
 
 }
 
-void ShowHeaderItem::setTimeScale(int val)
+void ShowHeaderItem::setTimeScale(qreal val)
 {
     m_timeScale = val;
+    updateTimeStep();
     update();
 }
 
-int ShowHeaderItem::getTimeScale() const
+void ShowHeaderItem::updateTimeStep()
+{
+    if (m_type > Show::Time && m_BPMValue > 0)
+        m_timeStep = ((float)(120 * HALF_SECOND_WIDTH) / (float)m_BPMValue) / (float)m_timeScale;
+    else
+        m_timeStep = HALF_SECOND_WIDTH;
+}
+
+qreal ShowHeaderItem::getTimeScale() const
 {
     return m_timeScale;
 }
@@ -129,7 +150,6 @@ void ShowHeaderItem::setTimeDivisionType(Show::TimeDivision type)
     m_type = type;
     if (m_type == Show::Time)
     {
-        m_timeStep = HALF_SECOND_WIDTH;
         m_timeHit = 2;
     }
     else
@@ -141,6 +161,7 @@ void ShowHeaderItem::setTimeDivisionType(Show::TimeDivision type)
         else if (m_type == Show::BPM_2_4)
             m_timeHit = 2;
     }
+    updateTimeStep();
     update();
 }
 
@@ -149,12 +170,11 @@ Show::TimeDivision ShowHeaderItem::getTimeDivisionType() const
     return m_type;
 }
 
-void ShowHeaderItem::setBPMValue(int value)
+void ShowHeaderItem::setBPMValue(double value)
 {
     if (value > 1)
-    {
         m_BPMValue = value;
-    }
+    updateTimeStep();
     update();
 }
 

@@ -21,6 +21,7 @@
 #include <QHeaderView>
 
 #include "fixturetreewidget.h"
+#include "appicons.h"
 #include "qlcfixturedef.h"
 #include "fixturegroup.h"
 #include "qlcchannel.h"
@@ -28,6 +29,29 @@
 #include "doc.h"
 
 #define KColumnName 0
+
+
+static QString lampIconName(QLCFixtureDef::FixtureType type)
+{
+    switch (type)
+    {
+    case QLCFixtureDef::ColorChanger:   return "lamp-colorchanger";
+    case QLCFixtureDef::Dimmer:         return "lamp-dimmer";
+    case QLCFixtureDef::Effect:         return "lamp-effect";
+    case QLCFixtureDef::Fan:            return "lamp-fan";
+    case QLCFixtureDef::Flower:         return "lamp-flower";
+    case QLCFixtureDef::Hazer:          return "lamp-hazer";
+    case QLCFixtureDef::Laser:          return "lamp-laser";
+    case QLCFixtureDef::LEDBarBeams:    return "lamp-ledbar-beams";
+    case QLCFixtureDef::LEDBarPixels:   return "lamp-ledbar-pixels";
+    case QLCFixtureDef::MovingHead:     return "lamp-movinghead";
+    case QLCFixtureDef::Scanner:        return "lamp-scanner";
+    case QLCFixtureDef::Smoke:          return "lamp-smoke";
+    case QLCFixtureDef::Strobe:         return "lamp-strobe";
+    case QLCFixtureDef::Other:
+    default:                            return "lamp-other";
+    }
+}
 
 FixtureTreeWidget::FixtureTreeWidget(Doc *doc, quint32 flags, QWidget *parent)
     : QTreeWidget(parent)
@@ -172,7 +196,7 @@ void FixtureTreeWidget::updateFixtureItem(QTreeWidgetItem* item, Fixture* fixtur
         return;
 
     item->setText(KColumnName, fixture->name());
-    item->setIcon(KColumnName, fixture->getIconFromType());
+    item->setIcon(KColumnName, AppIcons::icon(lampIconName(fixture->type()), 32));
     item->setData(KColumnName, PROP_ID, QString::number(fixture->id()));
     if (m_channelSelection)
     {
@@ -281,7 +305,7 @@ void FixtureTreeWidget::updateGroupItem(QTreeWidgetItem* item, const FixtureGrou
     Q_ASSERT(grp != NULL);
 
     item->setText(KColumnName, grp->name());
-    item->setIcon(KColumnName, QIcon(":/group.png"));
+    item->setIcon(KColumnName, AppIcons::icon("folder", 32));
     item->setData(KColumnName, PROP_GROUP, grp->id());
 
     // This should be a safe check because simultaneous add/removal is not possible,
@@ -460,7 +484,7 @@ void FixtureTreeWidget::updateTree()
         {
             topItem = new QTreeWidgetItem(this);
             topItem->setText(KColumnName, m_doc->inputOutputMap()->getUniverseNameByID(uni));
-            topItem->setIcon(KColumnName, QIcon(":/group.png"));
+            topItem->setIcon(KColumnName, AppIcons::icon("folder", 32));
             topItem->setData(KColumnName, PROP_UNIVERSE, uni);
             topItem->setExpanded(true);
             if (m_channelSelection)

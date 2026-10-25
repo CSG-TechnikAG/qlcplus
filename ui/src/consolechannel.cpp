@@ -23,6 +23,10 @@
 #include <QVBoxLayout>
 #include <QToolButton>
 #include <QSpinBox>
+#include <QLineEdit>
+#include <QIntValidator>
+#include <QLineEdit>
+#include <QTimer>
 #include <QDebug>
 #include <QLabel>
 #include <QMenu>
@@ -34,6 +38,8 @@
 #include "doc.h"
 #include "fixture.h"
 #include "apputil.h"
+#include "appicons.h"
+#include "theme.h"
 #include "consolechannel.h"
 
 /*****************************************************************************
@@ -49,6 +55,7 @@ ConsoleChannel::ConsoleChannel(QWidget* parent, Doc* doc, quint32 fixture, quint
     , m_presetButton(NULL)
     , m_cngWidget(NULL)
     , m_spin(NULL)
+    , m_valueEdit(NULL)
     , m_slider(NULL)
     , m_label(NULL)
     , m_resetButton(NULL)
@@ -100,14 +107,40 @@ void ConsoleChannel::init()
     m_spin = new QSpinBox(this);
     m_spin->setRange(0, UCHAR_MAX);
     m_spin->setValue(0);
-    m_spin->setMinimumWidth(25);
-    m_spin->setMaximumWidth(40);
+    m_spin->setMinimumWidth(48);
+    m_spin->setMaximumWidth(60);
+    m_spin->setMinimumHeight(26);
+    m_spin->setFocusPolicy(Qt::StrongFocus);
     m_spin->setButtonSymbols(QAbstractSpinBox::NoButtons);
-    m_spin->setStyle(AppUtil::saneStyle());
+    m_spin->setToolTip(tr("Channel value (0-255)"));
     layout()->addWidget(m_spin);
     m_spin->setAlignment(Qt::AlignCenter);
     m_spin->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Preferred);
     layout()->setAlignment(m_spin, Qt::AlignHCenter);
+
+    m_valueEdit = new QLineEdit(this);
+    m_valueEdit->setAlignment(Qt::AlignCenter);
+    m_valueEdit->setValidator(new QIntValidator(0, 255, m_valueEdit));
+    m_valueEdit->setMinimumWidth(48);
+    m_valueEdit->setMaximumWidth(60);
+    m_valueEdit->setFixedHeight(26);
+    m_valueEdit->setText("0");
+    m_valueEdit->setToolTip(tr("Channel value (0-255)"));
+    layout()->addWidget(m_valueEdit);
+    layout()->setAlignment(m_valueEdit, Qt::AlignHCenter);
+    m_spin->hide();
+
+    connect(m_valueEdit, &QLineEdit::editingFinished, this, [this]()
+    {
+        bool ok = false;
+        const int value = m_valueEdit->text().toInt(&ok);
+        if (ok == false)
+        {
+            m_valueEdit->setText(QString::number(m_spin->value()));
+            return;
+        }
+        m_spin->setValue(qBound(0, value, 255));
+    });
 
     /* Value slider */
     m_slider = new ClickAndGoSlider(this);
@@ -119,32 +152,16 @@ void ConsoleChannel::init()
     connect(m_slider, SIGNAL(controlClicked()),
             this, SLOT(slotControlClicked()));
 
-    QString style = "QSlider::groove:vertical { background: transparent; width: 32px; } "
-
-                    "QSlider::handle:vertical { "
-                    "background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #ddd, stop:0.45 #888, stop:0.50 #000, stop:0.55 #888, stop:1 #999);"
-                    "border: 1px solid #5c5c5c;"
-                    "border-radius: 4px; margin: 0 -1px; height: 20px; }"
-
-                    "QSlider::handle:vertical:hover {"
-                    "background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #eee, stop:0.45 #999, stop:0.50 #ff0000, stop:0.55 #999, stop:1 #ccc);"
-                    "border: 1px solid #000; }"
-
-                    "QSlider::add-page:vertical { background: QLinearGradient( x1: 0, y1: 0, x2: 1, y2: 0, stop: 0 #78d, stop: 1 #97CDEC );"
-                    "border: 1px solid #5288A7; margin: 0 13px; }"
-
-                    "QSlider::sub-page:vertical { background: QLinearGradient( x1: 0, y1: 0, x2: 1, y2: 0, stop: 0 #888, stop: 1 #ddd );"
-                    "border: 1px solid #8E8A86; margin: 0 13px; }"
-
-                    "QSlider::handle:vertical:disabled { background: QLinearGradient(x1:0, y1:0, x2:0, y2:1, stop:0 #ddd, stop:0.45 #888, stop:0.50 #444, stop:0.55 #888, stop:1 #999);"
-                    "border: 1px solid #666; }";
+    QString style = cngDefaultStyle(false, 22, 0.78, 24, 18);
 
     QString userStyle = AppUtil::getStyleSheet("CONSOLE_CHANNEL_COMMON");
     if (!userStyle.isEmpty())
         style = userStyle;
 
-    m_slider->setMinimumWidth(25);
-    m_slider->setMaximumWidth(40);
+    m_slider->setMinimumWidth(48);
+    m_slider->setMaximumWidth(56);
+    m_slider->setMinimumHeight(90);
+    m_slider->setHandleValueLine(true);
     m_slider->setVisible(false);
     m_slider->setSliderStyleSheet(style);
     layout()->addWidget(m_slider);
@@ -159,6 +176,8 @@ void ConsoleChannel::init()
     m_label->setText(QString::number(m_chIndex + 1));
     m_label->setFocusPolicy(Qt::NoFocus);
     m_label->setWordWrap(true);
+    m_label->setAutoFillBackground(false);
+    updateEditorStyle();
 
     /* Set tooltip */
     if (fxi == NULL)
@@ -174,6 +193,7 @@ void ConsoleChannel::init()
         m_channel = ch;
     }
 
+    m_spin->hide();
     connect(m_spin, SIGNAL(valueChanged(int)), this, SLOT(slotSpinChanged(int)));
     connect(m_slider, SIGNAL(valueChanged(int)), this, SLOT(slotSliderChanged(int)));
     connect(this, SIGNAL(toggled(bool)), this, SLOT(slotChecked(bool)));
@@ -184,9 +204,19 @@ void ConsoleChannel::showEvent(QShowEvent *)
     if (m_styleSheet.isEmpty() == false)
     {
         setChannelStyleSheet(m_styleSheet);
-        m_slider->setVisible(true);
         m_styleSheet = "";
     }
+
+    updateEditorStyle();
+    QTimer::singleShot(0, this, [this]() { updateEditorStyle(); });
+    m_slider->setVisible(true);
+    m_spin->hide();
+    if (m_valueEdit != NULL)
+    {
+        m_valueEdit->setVisible(true);
+        m_valueEdit->raise();
+    }
+    m_label->setVisible(true);
 }
 
 /*****************************************************************************
@@ -248,6 +278,8 @@ void ConsoleChannel::setValue(uchar value, bool apply)
 
     m_slider->setValue(int(value));
     m_spin->setValue(int(value));
+    if (m_valueEdit != NULL)
+        m_valueEdit->setText(QString::number(int(value)));
 
     if (apply == false)
     {
@@ -265,6 +297,8 @@ void ConsoleChannel::slotSpinChanged(int value)
 {
     if (value != m_slider->value())
         m_slider->setValue(value);
+    if (m_valueEdit != NULL && m_valueEdit->text().toInt() != value)
+        m_valueEdit->setText(QString::number(value));
 
     if (m_group == Fixture::invalidId())
         emit valueChanged(m_fixture, m_chIndex, value);
@@ -276,6 +310,8 @@ void ConsoleChannel::slotSliderChanged(int value)
 {
     if (value != m_spin->value())
         m_spin->setValue(value);
+    if (m_valueEdit != NULL && m_valueEdit->text().toInt() != value)
+        m_valueEdit->setText(QString::number(value));
 }
 void ConsoleChannel::slotChecked(bool state)
 {
@@ -293,9 +329,38 @@ void ConsoleChannel::slotChecked(bool state)
 void ConsoleChannel::setChannelStyleSheet(const QString &styleSheet)
 {
     if (isVisible())
+    {
         QGroupBox::setStyleSheet(styleSheet);
+        updateEditorStyle();
+        QTimer::singleShot(0, this, [this]() { updateEditorStyle(); });
+    }
     else
         m_styleSheet = styleSheet;
+}
+
+void ConsoleChannel::updateEditorStyle()
+{
+    Theme *theme = Theme::instance();
+    const QString text = theme->color(Theme::Text).name();
+    m_spin->setStyleSheet(QString("QSpinBox { background-color: %1; color: %2; "
+                                  "border: 1px solid %3; border-radius: 4px; "
+                                  "padding: 2px; }")
+                          .arg(theme->color(Theme::SurfaceRaised).name())
+                          .arg(text)
+                          .arg(theme->color(Theme::BorderStrong).name()));
+
+    if (m_valueEdit != NULL)
+    {
+        m_valueEdit->setStyleSheet(QString("QLineEdit { background-color: %1; color: %2; "
+                                           "border: 1px solid %3; border-radius: 4px; "
+                                           "padding: 2px; }")
+                                   .arg(theme->color(Theme::SurfaceRaised).name())
+                                   .arg(text)
+                                   .arg(theme->color(Theme::BorderStrong).name()));
+    }
+
+    m_label->setStyleSheet(QString("QLabel { background: transparent; color: %1; }")
+                           .arg(theme->color(Theme::TextDim).name()));
 }
 
 void ConsoleChannel::showResetButton(bool show)
@@ -312,7 +377,7 @@ void ConsoleChannel::showResetButton(bool show)
             m_resetButton->setMinimumSize(QSize(32, 32));
             m_resetButton->setMaximumSize(QSize(32, 32));
             m_resetButton->setFocusPolicy(Qt::NoFocus);
-            m_resetButton->setIcon(QIcon(":/fileclose.png"));
+            m_resetButton->setIcon(AppIcons::icon("x", 16, AppIcons::Destructive));
             m_resetButton->setToolTip(tr("Reset this channel"));
         }
         connect(m_resetButton, SIGNAL(clicked(bool)),
@@ -556,7 +621,7 @@ QIcon ConsoleChannel::colorIcon(const QString& name)
     if (name.toLower().contains("rainbow") ||
             name.toLower().contains("cw") == true)
     {
-        return QIcon(":/rainbow.png");
+        return AppIcons::icon("scene-color", 32);
     }
     else if (name.toLower().contains("cto") == true)
     {

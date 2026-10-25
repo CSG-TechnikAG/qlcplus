@@ -25,6 +25,7 @@
 
 #include "chaserstep.h"
 #include "showeditor.h"
+#include "appicons.h"
 #include "chaser.h"
 #include "track.h"
 #include "scene.h"
@@ -105,7 +106,7 @@ void ShowEditor::updateFunctionList()
     QTreeWidgetItem* masterItem = new QTreeWidgetItem(m_tree);
     masterItem->setText(NAME_COL, m_show->name());
     masterItem->setData(NAME_COL, PROP_ID, m_show->id());
-    masterItem->setIcon(NAME_COL, QIcon(":/show.png"));
+    masterItem->setIcon(NAME_COL, AppIcons::icon("shows", 24));
 
     foreach (Track *track, m_show->tracks())
     {
@@ -119,7 +120,7 @@ void ShowEditor::updateFunctionList()
                 sceneItem = new QTreeWidgetItem(masterItem);
                 sceneItem->setText(NAME_COL, scene->name());
                 sceneItem->setData(NAME_COL, PROP_ID, scene->id());
-                sceneItem->setIcon(NAME_COL, QIcon(":/scene.png"));
+                sceneItem->setIcon(NAME_COL, AppIcons::icon("scene", 24));
             }
         }
 
@@ -148,7 +149,7 @@ void ShowEditor::updateFunctionList()
             if (func->type() == Function::ChaserType)
             {
                 Chaser *chaser = qobject_cast<Chaser*>(func);
-                fItem->setIcon(NAME_COL, QIcon(":/sequence.png"));
+                fItem->setIcon(NAME_COL, AppIcons::icon("sequence", 24));
                 fItem->setText(STEPS_COL, QString("%1").arg(chaser->steps().count()));
             }
             else

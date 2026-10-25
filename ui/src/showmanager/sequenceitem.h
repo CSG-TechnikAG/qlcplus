@@ -49,10 +49,13 @@ public:
     void paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget) override;
 
     /** @reimp */
-    void setTimeScale(int val) override;
+    void setTimeScale(qreal val) override;
 
     /** @reimp */
     void setDuration(quint32 msec, bool stretch) override;
+
+    /** @reimp */
+    quint32 getDuration() const override;
 
     /** @reimp */
     QString functionName() const override;

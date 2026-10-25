@@ -23,11 +23,17 @@
 #include <QLabel>
 #include <QDebug>
 #include <QUrl>
+#include <QDataStream>
+#include <QPointer>
+#include <QPushButton>
+#include <QThread>
+#include <QMessageBox>
 
 #include "audioplugincache.h"
 #include "speeddialwidget.h"
 #include "audiodecoder.h"
 #include "audioeditor.h"
+#include "audioanalyzer.h"
 #include "audio.h"
 #include "doc.h"
 
@@ -44,6 +50,19 @@ AudioEditor::AudioEditor(QWidget* parent, Audio *audio, Doc* doc)
 
     m_nameEdit->setText(m_audio->name());
     m_nameEdit->setSelection(0, m_nameEdit->text().length());
+
+    QString metadata;
+    if (m_audio->artist().isEmpty() == false)
+        metadata = m_audio->artist();
+    if (m_audio->album().isEmpty() == false)
+        metadata += QString(metadata.isEmpty() ? "%1" : " — %1").arg(m_audio->album());
+    if (m_audio->genre().isEmpty() == false)
+        metadata += QString(metadata.isEmpty() ? "%1" : " — %1").arg(m_audio->genre());
+    if (metadata.isEmpty() == false)
+    {
+        m_nameEdit->setToolTip(metadata);
+        m_filenameLabel->setToolTip(metadata);
+    }
 
     m_fadeInEdit->setText(Function::speedToString(audio->fadeInSpeed()));
     m_fadeOutEdit->setText(Function::speedToString(audio->fadeOutSpeed()));
@@ -121,6 +140,63 @@ AudioEditor::AudioEditor(QWidget* parent, Audio *audio, Doc* doc)
             this, SLOT(slotLoopCheckClicked()));
     connect(m_singleCheck, SIGNAL(clicked()),
             this, SLOT(slotSingleShotCheckClicked()));
+
+    QPushButton *analyzeButton = new QPushButton(tr("Analyze BPM and waveform"), this);
+    analyzeButton->setToolTip(tr("Decode the audio file and detect tempo, waveform and beat triggers"));
+    gridLayout->addWidget(analyzeButton, 16, 0, 1, 5);
+    QPointer<QPushButton> analyzeGuard(analyzeButton);
+    connect(analyzeButton, &QPushButton::clicked, this, [this, analyzeGuard]()
+    {
+        AudioAnalyzer *analyzer = AudioAnalyzer::create(m_doc, m_audio);
+        if (analyzer == NULL)
+        {
+            QMessageBox::warning(this, tr("Analyze Audio"),
+                                 tr("The audio source file cannot be decoded."));
+            return;
+        }
+        if (analyzeGuard.isNull() == false)
+            analyzeGuard->setText(tr("Analyzing..."));
+        QPointer<Audio> audioGuard(m_audio);
+        Doc *doc = m_doc;
+        connect(analyzer, &AudioAnalyzer::analysisReady, m_audio,
+                [audioGuard, doc, analyzeGuard](quint32 id, double bpm, QByteArray waveform,
+                                                QByteArray beats, QByteArray triggers)
+        {
+            Q_UNUSED(id)
+            if (audioGuard.isNull())
+                return;
+            QVector<quint32> beatPositions;
+            QDataStream bStream(&beats, QIODevice::ReadOnly);
+            while (bStream.atEnd() == false)
+            {
+                quint32 value;
+                bStream >> value;
+                beatPositions.append(value);
+            }
+            QVector<quint32> triggerPositions;
+            QDataStream tStream(&triggers, QIODevice::ReadOnly);
+            while (tStream.atEnd() == false)
+            {
+                quint32 value;
+                tStream >> value;
+                triggerPositions.append(value);
+            }
+            audioGuard->setAnalysis(bpm, waveform, beatPositions, triggerPositions);
+            doc->setModified();
+            if (analyzeGuard.isNull() == false)
+                analyzeGuard->setText(tr("Re-analyze audio (BPM %1)").arg(bpm));
+        });
+        connect(analyzer, &AudioAnalyzer::analysisFailed, this,
+                [this, analyzeGuard](quint32 id, const QString &reason)
+        {
+            Q_UNUSED(id)
+            if (analyzeGuard.isNull() == false)
+                analyzeGuard->setText(tr("Analyze BPM and waveform"));
+            QMessageBox::warning(this, tr("Analyze Audio"), reason);
+        });
+        connect(analyzer, &QThread::finished, analyzer, &QObject::deleteLater);
+        analyzer->start();
+    });
 
     // Set focus to the editor
     m_nameEdit->setFocus();

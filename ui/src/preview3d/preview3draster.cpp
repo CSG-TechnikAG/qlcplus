@@ -9,9 +9,8 @@
       http://www.apache.org/licenses/LICENSE-2.0.txt
 */
 
-#include <QPainter>
-#include <QLinearGradient>
 #include <QtMath>
+#include <algorithm>
 
 #include "preview3draster.h"
 
@@ -32,7 +31,10 @@ void SoftwareRaster::begin(int width, int height, int supersample)
 
     if (m_img.width() != m_w || m_img.height() != m_h)
     {
-        m_img = QImage(m_w, m_h, QImage::Format_ARGB32_Premultiplied);
+        /* Non-premultiplied storage keeps the software blend below exact and
+         * avoids the washed-out alpha seen when writing qRgb() into a
+         * premultiplied image. */
+        m_img = QImage(m_w, m_h, QImage::Format_ARGB32);
         m_depth.resize(m_w * m_h);
     }
     if (m_img.isNull())
@@ -42,58 +44,37 @@ void SoftwareRaster::begin(int width, int height, int supersample)
         m_h = 0;
         return;
     }
-    m_img.fill(Qt::transparent);
+    /* The gradient always covers the full image, so no separate clear is
+     * needed here. */
     m_depth.fill(0.0f);   // 0 = infinitely far (invW)
 }
 
 void SoftwareRaster::fillGradient(const QColor &top, const QColor &bottom)
 {
-    QPainter p(&m_img);
-    QLinearGradient g(0, 0, 0, m_h);
-    g.setColorAt(0.0, top);
-    g.setColorAt(1.0, bottom);
-    p.fillRect(m_img.rect(), g);
-}
-
-void SoftwareRaster::blend(int x, int y, float iw, const QColor &color)
-{
-    if (x < 0 || y < 0 || x >= m_w || y >= m_h)
+    if (m_w <= 0 || m_h <= 0)
         return;
 
-    const int idx = y * m_w + x;
-    if (iw < m_depth[idx])
-        return;
-    if (m_depthWrite)
-        m_depth[idx] = iw;
-
-    QRgb *row = reinterpret_cast<QRgb *>(m_img.scanLine(y));
-    if (m_additive)
+    /* Vertical-only gradient: one solid scanline at a time is much cheaper
+     * than running QPainter/QLinearGradient over every supersampled pixel. */
+    const double invH = (m_h > 1) ? 1.0 / double(m_h - 1) : 0.0;
+    for (int y = 0; y < m_h; ++y)
     {
-        // Light adds up: overlapping beams mix toward white.
-        const int a = color.alpha();
-        const QRgb old = row[x];
-        row[x] = qRgb(qMin(255, qRed(old) + color.red() * a / 255),
-                      qMin(255, qGreen(old) + color.green() * a / 255),
-                      qMin(255, qBlue(old) + color.blue() * a / 255));
-    }
-    else if (color.alpha() == 255)
-    {
-        row[x] = color.rgb();
-    }
-    else
-    {
-        const int a = color.alpha();
-        const QRgb old = row[x];
-        const int ia = 255 - a;
-        row[x] = qRgb((qRed(old) * ia + color.red() * a) / 255,
-                      (qGreen(old) * ia + color.green() * a) / 255,
-                      (qBlue(old) * ia + color.blue() * a) / 255);
+        const double t = y * invH;
+        const QRgb c = qRgba(qRound(top.red() + (bottom.red() - top.red()) * t),
+                             qRound(top.green() + (bottom.green() - top.green()) * t),
+                             qRound(top.blue() + (bottom.blue() - top.blue()) * t),
+                             qRound(top.alpha() + (bottom.alpha() - top.alpha()) * t));
+        QRgb *row = reinterpret_cast<QRgb *>(m_img.scanLine(y));
+        std::fill(row, row + m_w, c);
     }
 }
 
 void SoftwareRaster::triangle(const QPointF &p0, const QPointF &p1, const QPointF &p2,
                               double iw0, double iw1, double iw2, const QColor &color)
 {
+    if (m_w <= 0 || m_h <= 0 || color.alpha() <= 0)
+        return;
+
     const double x0 = p0.x() * m_ss, y0 = p0.y() * m_ss;
     const double x1 = p1.x() * m_ss, y1 = p1.y() * m_ss;
     const double x2 = p2.x() * m_ss, y2 = p2.y() * m_ss;
@@ -121,15 +102,55 @@ void SoftwareRaster::triangle(const QPointF &p0, const QPointF &p1, const QPoint
     const double dw1dx = A1 * invArea;
     const double startX = minX + 0.5;
 
+    const int alpha = color.alpha();
+    const int invAlpha = 255 - alpha;
+    const QRgb rgb = color.rgb();
+    const int red = color.red();
+    const int green = color.green();
+    const int blue = color.blue();
+    const int addRed = red * alpha / 255;
+    const int addGreen = green * alpha / 255;
+    const int addBlue = blue * alpha / 255;
+    const bool additive = m_additive;
+    const bool writeDepth = m_depthWrite;
+    float *depth = m_depth.data();
+
     for (int y = minY; y <= maxY; ++y)
     {
         const double py = y + 0.5;
         double w0 = (A0 * startX + B0 * py + C0) * invArea;
         double w1 = (A1 * startX + B1 * py + C1) * invArea;
+        QRgb *row = reinterpret_cast<QRgb *>(m_img.scanLine(y));
+        float *depthRow = depth + y * m_w;
         for (int x = minX; x <= maxX; ++x)
         {
             if (w0 >= 0.0 && w1 >= 0.0 && (w0 + w1) <= 1.0)
-                blend(x, y, float(w0 * iw0 + w1 * iw1 + (1.0 - w0 - w1) * iw2), color);
+            {
+                const float iw = float(w0 * iw0 + w1 * iw1 + (1.0 - w0 - w1) * iw2);
+                if (iw >= depthRow[x])
+                {
+                    if (writeDepth)
+                        depthRow[x] = iw;
+
+                    const QRgb old = row[x];
+                    if (additive)
+                    {
+                        row[x] = qRgb(qMin(255, qRed(old) + addRed),
+                                      qMin(255, qGreen(old) + addGreen),
+                                      qMin(255, qBlue(old) + addBlue));
+                    }
+                    else if (alpha == 255)
+                    {
+                        row[x] = rgb;
+                    }
+                    else
+                    {
+                        row[x] = qRgb((qRed(old) * invAlpha + red * alpha) / 255,
+                                      (qGreen(old) * invAlpha + green * alpha) / 255,
+                                      (qBlue(old) * invAlpha + blue * alpha) / 255);
+                    }
+                }
+            }
             w0 += dw0dx;
             w1 += dw1dx;
         }
@@ -187,7 +208,7 @@ void SoftwareRaster::dashedLine(const QPointF &p0, const QPointF &p1, double iw0
 
 void SoftwareRaster::sprite(const QPointF &center, double iw, double radius, const QColor &color)
 {
-    if (radius < 0.5 || color.alpha() <= 0)
+    if (m_w <= 0 || m_h <= 0 || radius < 0.5 || color.alpha() <= 0)
         return;
 
     const double cx = center.x() * m_ss;
@@ -205,31 +226,29 @@ void SoftwareRaster::sprite(const QPointF &center, double iw, double radius, con
     const int cg = color.green();
     const int cb = color.blue();
     const int baseA = color.alpha();
+    float *depth = m_depth.data();
 
     for (int y = minY; y <= maxY; ++y)
     {
-        const int row = y * m_w;
         const double dy = y + 0.5 - cy;
         const double dy2 = dy * dy;
-        QRgb *line = reinterpret_cast<QRgb *>(m_img.scanLine(y));
+        QRgb *row = reinterpret_cast<QRgb *>(m_img.scanLine(y));
+        const float *depthRow = depth + y * m_w;
         for (int x = minX; x <= maxX; ++x)
         {
             const double dx = x + 0.5 - cx;
             const double d2 = dx * dx + dy2;
-            if (d2 > r2)
-                continue;
-            const int idx = row + x;
-            if (iw < m_depth[idx])
+            if (d2 > r2 || iw < depthRow[x])
                 continue;
             const double f = 1.0 - qSqrt(d2) / r;
             const int a = int(baseA * f * f);
             if (a <= 0)
                 continue;
-            const QRgb old = line[x];
+            const QRgb old = row[x];
             const int ia = 255 - a;
-            line[x] = qRgb((qRed(old) * ia + cr * a) / 255,
-                           (qGreen(old) * ia + cg * a) / 255,
-                           (qBlue(old) * ia + cb * a) / 255);
+            row[x] = qRgb((qRed(old) * ia + cr * a) / 255,
+                          (qGreen(old) * ia + cg * a) / 255,
+                          (qBlue(old) * ia + cb * a) / 255);
         }
     }
 }

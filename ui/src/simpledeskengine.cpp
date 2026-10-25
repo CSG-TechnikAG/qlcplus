@@ -343,28 +343,31 @@ void SimpleDeskEngine::writeDMX(MasterTimer *timer, QList<Universe *> ua)
             {
                 quint32 channel = command.second;
                 quint32 universe = channel >> 9;
+                if (universe >= (quint32)ua.count())
+                    continue;
+
                 QSharedPointer<GenericFader> fader = m_fadersMap.value(universe, QSharedPointer<GenericFader>());
+                FadeChannel fc(m_doc, Fixture::invalidId(), channel);
+                Fixture *fixture = m_doc->fixture(fc.fixture());
+                quint32 chIndex = fc.channel();
+
                 if (!fader.isNull())
-                {
-                    FadeChannel fc(m_doc, Fixture::invalidId(), channel);
-                    Fixture *fixture = m_doc->fixture(fc.fixture());
-                    quint32 chIndex = fc.channel();
                     fader->remove(&fc);
 
-                    if (fixture != NULL && fixture->crossUniverse() && channel > 511)
-                        channel -= 512;
+                /* Reset even when Simple Desk has no fader for this universe,
+                 * which is the normal case when a scene/function was driving
+                 * the channel. The previous implementation skipped this. */
+                const quint32 uniChannel = channel & 0x01FF;
+                ua[universe]->reset(uniChannel, 1);
 
-                    ua[universe]->reset(channel & 0x01FF, 1);
-
-                    if (fixture != NULL)
+                if (fixture != NULL)
+                {
+                    const QLCChannel *ch = fixture->channel(chIndex);
+                    if (ch != NULL)
                     {
-                        const QLCChannel *ch = fixture->channel(chIndex);
-                        if (ch != NULL)
-                        {
-                            qDebug() << "Restoring default value of fixture" << fixture->id()
-                                     << "channel" << chIndex << "value" << ch->defaultValue();
-                            ua[universe]->setChannelDefaultValue(channel, ch->defaultValue());
-                        }
+                        qDebug() << "Restoring default value of fixture" << fixture->id()
+                                 << "channel" << chIndex << "value" << ch->defaultValue();
+                        ua[universe]->setChannelDefaultValue(uniChannel, ch->defaultValue());
                     }
                 }
             }

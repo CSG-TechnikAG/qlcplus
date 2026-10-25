@@ -49,10 +49,17 @@ public:
     void paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget) override;
 
     /** @reimp */
-    void setTimeScale(int val) override;
+    void setTimeScale(qreal val) override;
 
     /** @reimp */
     void setDuration(quint32 msec, bool stretch) override;
+
+    /** @reimp */
+    quint32 snapStartTime(quint32 start, quint32 gridStepMs,
+                          quint32 pointerTime) const override;
+
+    /** @reimp */
+    bool isDurationAdjustable() const override { return false; }
 
     /** @reimp */
     QString functionName() const override;
@@ -77,6 +84,9 @@ private:
 
     /** Start a thread to elapse a waveform preview over the item */
     void updateWaveformPreview();
+
+    /** Paint the analyzed waveform and tempo markers. */
+    void paintAnalysisWaveform(QPainter *painter);
 
 public:
     /** Reference to the actual Audio Function */

@@ -32,6 +32,7 @@
 #include "pathfunction.h"
 #include "flowlayout.h"
 #include "vcstagemap.h"
+#include "theme.h"
 #include "function.h"
 #include "doc.h"
 #include <QTimer>
@@ -453,7 +454,8 @@ void VCStageMap::updateView()
         mk.pos = QPointF(x, y);
         mk.name = sg->fixtureName(id);
         mk.selected = m_selected.contains(id);
-        mk.color = mk.selected ? QColor(255, 220, 0) : QColor(140, 140, 140);
+        mk.color = mk.selected ? Theme::instance()->accent()
+                               : Theme::instance()->color(Theme::TextDim);
         mk.calibrated = true;
         markers << mk;
     }

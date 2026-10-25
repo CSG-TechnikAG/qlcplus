@@ -48,6 +48,8 @@
 #include "vcmatrix.h"
 #include "qlcfile.h"
 #include "vcframe.h"
+#include "appicons.h"
+#include "theme.h"
 #include "vclabel.h"
 #include "vcxypad.h"
 #include "vcclock.h"
@@ -192,11 +194,29 @@ void VCFrame::setForegroundColor(const QColor &color)
 {
     if (m_label != NULL)
     {
-        m_label->setStyleSheet("QLabel { background-color: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #666666, stop: 1 #000000); "
-                               "color: " + color.name() + "; border-radius: 3px; padding: 3px; margin-left: 2px; }");
+        QPalette pal = m_label->palette();
+        pal.setColor(QPalette::WindowText, color);
+        m_label->setPalette(pal);
         m_hasCustomForegroundColor = true;
+        updateHeaderStyle();
         m_doc->setModified();
     }
+}
+
+void VCFrame::updateHeaderStyle()
+{
+    if (m_label == NULL)
+        return;
+
+    Theme *theme = Theme::instance();
+    const QColor fg = m_hasCustomForegroundColor ? foregroundColor()
+                                                 : theme->color(Theme::Text);
+    m_label->setStyleSheet(QString("QLabel { background-color: %1; color: %2; "
+                                   "border: 1px solid %3; border-radius: 5px; "
+                                   "padding: 3px; margin-left: 2px; margin-right: 2px; }")
+                           .arg(theme->color(Theme::SurfaceRaised).name())
+                           .arg(fg.name())
+                           .arg(theme->color(Theme::Border).name()));
 }
 
 QColor VCFrame::foregroundColor() const
@@ -309,22 +329,24 @@ void VCFrame::createHeader()
     m_collapseButton->setIconSize(QSize(32, 32));
     m_collapseButton->setMinimumSize(QSize(32, 32));
     m_collapseButton->setMaximumSize(QSize(32, 32));
-    m_collapseButton->setIcon(QIcon(":/expand.png"));
+    m_collapseButton->setIcon(AppIcons::icon("chevron-down", 20));
     m_collapseButton->setCheckable(true);
-    QString cBtnSS = "QToolButton { background-color: #E0DFDF; border: 1px solid gray; border-radius: 3px; padding: 3px; } ";
-    cBtnSS += "QToolButton:pressed { background-color: #919090; border: 1px solid gray; border-radius: 3px; padding: 3px; } ";
-    m_collapseButton->setStyleSheet(cBtnSS);
+    connect(m_collapseButton, &QToolButton::toggled, this, [this](bool checked)
+    {
+        m_collapseButton->setIcon(AppIcons::icon(checked ? "chevron-right"
+                                                         : "chevron-down", 20));
+    });
 
     m_hbox->addWidget(m_collapseButton);
     connect(m_collapseButton, SIGNAL(toggled(bool)), this, SLOT(slotCollapseButtonToggled(bool)));
 
     m_label = new QLabel(this);
     m_label->setText(this->caption());
-    QString txtColor = "white";
-    if (m_hasCustomForegroundColor)
-        txtColor = this->foregroundColor().name();
-    m_label->setStyleSheet("QLabel { background-color: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #666666, stop: 1 #000000); "
-                           "color: " + txtColor + "; border-radius: 3px; padding: 3px; margin-left: 2px; margin-right: 2px; }");
+    updateHeaderStyle();
+    connect(Theme::instance(), &Theme::changed, this, [this]()
+    {
+        updateHeaderStyle();
+    });
 
     if (m_hasCustomFont)
         m_label->setFont(font());
@@ -342,11 +364,8 @@ void VCFrame::createHeader()
     m_enableButton->setIconSize(QSize(32, 32));
     m_enableButton->setMinimumSize(QSize(32, 32));
     m_enableButton->setMaximumSize(QSize(32, 32));
-    m_enableButton->setIcon(QIcon(":/check.png"));
+    m_enableButton->setIcon(AppIcons::icon("check", 20));
     m_enableButton->setCheckable(true);
-    QString eBtnSS = "QToolButton { background-color: #E0DFDF; border: 1px solid gray; border-radius: 3px; padding: 3px; } ";
-    eBtnSS += "QToolButton:checked { background-color: #D7DE75; border: 1px solid gray; border-radius: 3px; padding: 3px; } ";
-    m_enableButton->setStyleSheet(eBtnSS);
     m_enableButton->setEnabled(true);
     m_enableButton->setChecked(true);
     if (!m_showEnableButton)
@@ -370,16 +389,12 @@ void VCFrame::setMultipageMode(bool enable)
         if (m_prevPageBtn != NULL && m_nextPageBtn != NULL && m_pageCombo != NULL)
             return;
 
-        QString btnSS = "QToolButton { background-color: #E0DFDF; border: 1px solid gray; border-radius: 3px; padding: 3px; margin-left: 2px; }";
-        btnSS += "QToolButton:pressed { background-color: #919090; border: 1px solid gray; border-radius: 3px; padding: 3px; margin-left: 2px; }";
-
         m_prevPageBtn = new QToolButton(this);
         m_prevPageBtn->setStyle(AppUtil::saneStyle());
         m_prevPageBtn->setIconSize(QSize(32, 32));
         m_prevPageBtn->setMinimumSize(QSize(32, 32));
         m_prevPageBtn->setMaximumSize(QSize(32, 32));
-        m_prevPageBtn->setIcon(QIcon(":/back.png"));
-        m_prevPageBtn->setStyleSheet(btnSS);
+        m_prevPageBtn->setIcon(AppIcons::icon("chevron-left", 20));
         m_hbox->addWidget(m_prevPageBtn);
 
         m_pageCombo = new QComboBox(this);
@@ -390,7 +405,6 @@ void VCFrame::setMultipageMode(bool enable)
         /** Add a single shortcut until setTotalPagesNumber kicks in */
         addShortcut();
 
-        m_pageCombo->setStyleSheet("QComboBox { background-color: black; color: red; margin-left: 2px; padding: 3px; }");
         if (m_hasCustomFont)
         {
             m_pageCombo->setFont(font());
@@ -409,8 +423,7 @@ void VCFrame::setMultipageMode(bool enable)
         m_nextPageBtn->setIconSize(QSize(32, 32));
         m_nextPageBtn->setMinimumSize(QSize(32, 32));
         m_nextPageBtn->setMaximumSize(QSize(32, 32));
-        m_nextPageBtn->setIcon(QIcon(":/forward.png"));
-        m_nextPageBtn->setStyleSheet(btnSS);
+        m_nextPageBtn->setIcon(AppIcons::icon("chevron-right", 20));
         m_hbox->addWidget(m_nextPageBtn);
 
         connect (m_prevPageBtn, SIGNAL(clicked()), this, SLOT(slotPreviousPage()));

@@ -26,6 +26,7 @@
 #include <QList>
 #include <QColor>
 #include <QString>
+#include <QSize>
 #include <QElapsedTimer>
 
 #include "preview3draster.h"
@@ -75,6 +76,8 @@ public:
 
     /** Trusses to render. */
     void setTrussScene(TrussScene *scene);
+    /** Mark the static beam occluders as changed (truss edits/load). */
+    void invalidateOccluders();
     /** Enable/disable truss picking, dragging and linking. */
     void setTrussInteractive(bool on);
     bool isTrussInteractive() const { return m_trussInteractive; }
@@ -151,6 +154,7 @@ private:
     void rasterStage(SoftwareRaster &r) const;
     void rasterTrusses(SoftwareRaster &r) const;
     void rasterFixtures(SoftwareRaster &r) const;
+    void rebuildOccluders() const;
     void rasterBox(SoftwareRaster &r, const QVector3D &center, const QQuaternion &rot,
                    const QVector3D &size, const QColor &fill, const QColor &edge) const;
     /** A capped cylinder whose axis is the rotated local +Y (beam direction). */
@@ -239,6 +243,7 @@ private:
     QColor m_selectColor;
 
     SoftwareRaster m_raster;
+    QImage m_vignette;
 
     // Beam collision occluders (truss segments), rebuilt each frame.
     struct Occluder
@@ -248,6 +253,7 @@ private:
         double radius;
     };
     mutable QList<Occluder> m_occluders;
+    mutable bool m_occludersDirty;
 
     QElapsedTimer m_fpsTimer;
     QElapsedTimer m_frameTimer;

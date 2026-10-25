@@ -22,7 +22,9 @@
 #include "genericfader_test.h"
 #include "qlcfixturemode.h"
 #include "qlcfixturedef.h"
+#define protected public
 #include "fadechannel.h"
+#undef protected
 #include "qlcchannel.h"
 #include "universe.h"
 #include "qlcfile.h"
@@ -33,6 +35,53 @@
 #undef private
 
 #include "../common/resource_paths.h"
+
+void GenericFader_Test::removalClearsChannels()
+{
+    QList<Universe*> ua = m_doc->inputOutputMap()->universes();
+    QVERIFY(ua.isEmpty() == false);
+    Universe *uni = ua[0];
+
+    /* Previous tests may have left faders registered on this universe. */
+    const QList<QSharedPointer<GenericFader>> stale = uni->faders();
+    for (const QSharedPointer<GenericFader> &f : stale)
+    {
+        if (!f.isNull())
+            uni->dismissFader(f);
+    }
+    uni->reset();
+
+    /* Make one channel intensity and one movement, so the release path is
+     * exercised for both HTP and LTP data. */
+    uni->setChannelCapability(10, QLCChannel::Intensity);
+    uni->setChannelCapability(11, QLCChannel::Pan);
+
+    Fixture *fxi = m_doc->fixture(0);
+    QVERIFY(fxi != NULL);
+    uni->setChannelCapability(fxi->universeAddress(), QLCChannel::Intensity);
+    uni->setChannelCapability(fxi->universeAddress() + 1, QLCChannel::Pan);
+
+    QSharedPointer<GenericFader> fader = uni->requestFader();
+    fader->updateChannel(m_doc, uni, fxi->id(), 0, [](FadeChannel &fc)
+    {
+        fc.setCurrent(255);
+        fc.setTarget(255);
+    });
+    fader->updateChannel(m_doc, uni, fxi->id(), 1, [](FadeChannel &fc)
+    {
+        fc.setCurrent(150);
+        fc.setTarget(150);
+    });
+
+    uni->processFaders(1);
+    QCOMPARE(int(uni->preGMValue(fxi->universeAddress())), 255);
+    QCOMPARE(int(uni->preGMValue(fxi->universeAddress() + 1)), 150);
+
+    fader->requestDelete();
+    uni->processFaders(1);
+    QCOMPARE(int(uni->preGMValue(fxi->universeAddress())), 0);
+    QCOMPARE(int(uni->preGMValue(fxi->universeAddress() + 1)), 0);
+}
 
 void GenericFader_Test::initTestCase()
 {

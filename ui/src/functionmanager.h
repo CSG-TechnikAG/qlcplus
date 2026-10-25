@@ -32,8 +32,10 @@ class QSplitter;
 class QToolBar;
 class QAction;
 class Fixture;
+class Audio;
 class QMenu;
 class Doc;
+class AppEmptyState;
 
 /** @addtogroup ui_functions
  * @{
@@ -106,6 +108,7 @@ private:
     QSplitter* m_hsplitter;
     QSplitter* m_vsplitter;
     FunctionsTreeWidget* m_tree;
+    AppEmptyState* m_noEditorState;
 
     /*********************************************************************
      * Menus, toolbar & actions
@@ -113,6 +116,7 @@ private:
 protected:
     void initActions();
     void initToolbar();
+    void updateEditorPlaceholder();
 
 protected slots:
     void slotAddScene();
@@ -170,6 +174,9 @@ private:
 
     /** Delete current editor. Can be synchronous. */
     void deleteCurrentEditor(bool async = true);
+
+    /** Decode an Audio function in the background and store its analysis. */
+    void analyzeAudio(Audio *audio);
 
 private:
     QWidget* m_editor;

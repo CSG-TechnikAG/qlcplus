@@ -21,6 +21,8 @@
 #define AUDIO_H
 
 #include <QColor>
+#include <QByteArray>
+#include <QVector>
 
 #include "audiorenderer.h"
 #include "audiodecoder.h"
@@ -118,10 +120,32 @@ public:
      */
     QString audioDevice() const;
 
+    /** SongRequest / library metadata */
+    QString artist() const;
+    void setArtist(const QString &artist);
+    QString album() const;
+    void setAlbum(const QString &album);
+    QString genre() const;
+    void setGenre(const QString &genre);
+    QString songRequestId() const;
+    void setSongRequestId(const QString &id);
+
+    /** Detected tempo and waveform analysis (waveform is 0..255 at 50 Hz) */
+    double bpm() const;
+    QByteArray waveform() const;
+    QVector<quint32> beatPositions() const;
+    QVector<quint32> triggerPoints() const;
+    bool hasAnalysis() const;
+    void setAnalysis(double bpm, const QByteArray &waveform,
+                     const QVector<quint32> &beats,
+                     const QVector<quint32> &triggers);
+    void clearAnalysis();
+
     int adjustAttribute(qreal fraction, int attributeId) override;
 
 signals:
     void sourceFilenameChanged();
+    void analysisChanged();
 
 protected slots:
     void slotEndOfStream();
@@ -139,6 +163,16 @@ private:
     qint64 m_audioDuration;
     /** Startup volume of the audio file */
     qreal m_volume;
+    /** Imported metadata */
+    QString m_artist;
+    QString m_album;
+    QString m_genre;
+    QString m_songRequestId;
+    /** Audio analysis */
+    double m_bpm;
+    QByteArray m_waveform;
+    QVector<quint32> m_beats;
+    QVector<quint32> m_triggers;
 
     /*********************************************************************
      * Save & Load

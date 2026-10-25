@@ -1,0 +1,1180 @@
+/*
+  Q Light Controller Plus - built-in UI design system
+  base.qss
+
+  Tokenized stylesheet for the modern themes. The theme engine replaces the
+  %TOKENS% with the selected scheme before applying the sheet to QApplication.
+  Keep selectors class based and avoid the universal selector: QLC+ workspaces
+  can contain thousands of widgets and the stylesheet cache must stay effective.
+
+  Geometry rules:
+    controls   32 px high, 8 px radius
+    cards      12 px radius
+    dialogs    12 px radius, 18 px padding
+    row items  28-32 px high, 6 px radius
+*/
+
+/* ------------------------------------------------------------------ */
+/* Application chrome                                                  */
+/* ------------------------------------------------------------------ */
+
+QMainWindow,
+QDialog,
+QMessageBox
+{
+    background-color: %BG%;
+    color: %TEXT%;
+}
+
+QMessageBox QLabel
+{
+    color: %TEXT%;
+}
+
+QMessageBox QDialogButtonBox
+{
+    spacing: 6px;
+}
+
+QMessageBox QPushButton
+{
+    min-width: 88px;
+    min-height: 34px;
+}
+
+QMainWindow::separator
+{
+    background: %BORDER%;
+    width: 1px;
+    height: 1px;
+}
+
+QStatusBar
+{
+    background: %SURFACE%;
+    color: %TEXT_DIM%;
+    border-top: 1px solid %BORDER%;
+}
+
+QStatusBar::item
+{
+    border: none;
+}
+
+QFrame[frameShape="4"],
+QFrame[frameShape="5"]
+{
+    color: %BORDER%;
+}
+
+/* ------------------------------------------------------------------ */
+/* Toolbars                                                            */
+/* ------------------------------------------------------------------ */
+
+QToolBar
+{
+    background: %SURFACE%;
+    border: none;
+    border-bottom: 1px solid %BORDER%;
+    padding: 3px 6px;
+    spacing: 1px;
+}
+
+QToolBar::separator
+{
+    background: %BORDER%;
+    width: 1px;
+    margin: 6px 4px;
+}
+
+QToolBar QToolButton
+{
+    border-radius: %RADIUS_SM%;
+    padding: 2px;
+}
+
+/* ------------------------------------------------------------------ */
+/* Buttons                                                             */
+/* ------------------------------------------------------------------ */
+
+/* Command and tool button panels are painted by UiStyleProxy so the hover
+ * fades, pressed state and ripple stay composited. QSS controls typography,
+ * minimum size and role-specific text colours. */
+
+QPushButton
+{
+    color: %TEXT%;
+    padding: 7px 14px;
+    min-height: 22px;
+}
+
+QPushButton:hover
+{
+    color: %TEXT%;
+}
+
+QPushButton:pressed
+{
+    color: %ACCENT_PRESS_TEXT%;
+}
+
+QPushButton:default:pressed
+{
+    color: %ACCENT_TEXT%;
+}
+
+QPushButton:checked:pressed
+{
+    color: %TEXT%;
+}
+
+QPushButton:default
+{
+    color: %ACCENT_TEXT%;
+}
+
+QPushButton:checked
+{
+    color: %TEXT%;
+}
+
+QPushButton:default:hover
+{
+    color: %ACCENT_TEXT%;
+}
+
+QPushButton:checked:hover
+{
+    color: %TEXT%;
+}
+
+QPushButton:disabled
+{
+    color: %TEXT_DISABLED%;
+}
+
+QPushButton[uiRole="primary"]
+{
+    color: %ACCENT_TEXT%;
+    font-weight: 500;
+}
+
+QPushButton[uiRole="primary"]:pressed
+{
+    color: %ACCENT_PRESS_TEXT%;
+}
+
+QPushButton[uiRole="primary"]:disabled
+{
+    color: %TEXT_DISABLED%;
+}
+
+QPushButton[uiRole="danger"]
+{
+    color: %DANGER_TEXT%;
+    font-weight: 500;
+}
+
+QPushButton[uiRole="danger"]:pressed
+{
+    color: %DANGER_PRESS_TEXT%;
+}
+
+QPushButton[uiRole="danger"]:disabled
+{
+    color: %TEXT_DISABLED%;
+}
+
+QPushButton[uiRole="ghost"],
+QToolButton[uiRole="ghost"]
+{
+    color: %TEXT_DIM%;
+}
+
+QPushButton[uiRole="ghost"]:hover,
+QToolButton[uiRole="ghost"]:hover
+{
+    color: %TEXT%;
+}
+
+QPushButton[uiRole="ghost"]:pressed,
+QToolButton[uiRole="ghost"]:pressed
+{
+    color: %ACCENT%;
+}
+
+QToolButton
+{
+    color: %TEXT%;
+    padding: 3px;
+    border: 1px solid transparent;
+}
+
+QToolButton:hover
+{
+    border-color: %BORDER_STRONG%;
+}
+
+QToolButton:checked
+{
+    border-color: %ACCENT%;
+}
+
+QToolButton:checked:hover
+{
+    border-color: %ACCENT%;
+}
+
+QToolButton[uiRole="primary"]
+{
+    color: %ACCENT_TEXT%;
+    font-weight: 500;
+}
+
+QToolButton:pressed
+{
+    color: %ACCENT_PRESS_TEXT%;
+}
+
+QToolButton[uiRole="primary"]:pressed
+{
+    color: %ACCENT_PRESS_TEXT%;
+}
+
+QToolButton[uiRole="primary"]:disabled
+{
+    color: %TEXT_DISABLED%;
+}
+
+QToolButton:disabled
+{
+    color: %TEXT_DISABLED%;
+}
+
+QToolButton::menu-indicator
+{
+    image: url(%ARROW_DOWN%);
+    width: 9px;
+    height: 9px;
+    subcontrol-position: right center;
+    subcontrol-origin: padding;
+    right: 3px;
+}
+
+QToolButton[popupMode="1"]
+{
+    padding-right: 20px;
+}
+
+QDialogButtonBox
+{
+    spacing: 6px;
+}
+
+QDialogButtonBox QPushButton
+{
+    min-width: 88px;
+    min-height: 34px;
+}
+
+/* ------------------------------------------------------------------ */
+/* Text inputs and selectors                                           */
+/* ------------------------------------------------------------------ */
+
+QLineEdit,
+QSpinBox,
+QDoubleSpinBox,
+QComboBox,
+QDateEdit,
+QTimeEdit,
+QDateTimeEdit
+{
+    background-color: %SURFACE%;
+    color: %TEXT%;
+    border: 1px solid %BORDER_STRONG%;
+    border-radius: %RADIUS%;
+    padding: 6px 8px;
+    min-height: 22px;
+    selection-background-color: %ACCENT%;
+    selection-color: %ACCENT_TEXT%;
+}
+
+QLineEdit:hover,
+QSpinBox:hover,
+QDoubleSpinBox:hover,
+QComboBox:hover,
+QDateEdit:hover,
+QTimeEdit:hover,
+QDateTimeEdit:hover
+{
+    border-color: %TEXT_DIM%;
+}
+
+QLineEdit:focus,
+QSpinBox:focus,
+QDoubleSpinBox:focus,
+QComboBox:focus,
+QDateEdit:focus,
+QTimeEdit:focus,
+QDateTimeEdit:focus
+{
+    border-color: %ACCENT%;
+    background-color: %SURFACE%;
+}
+
+QLineEdit:disabled,
+QSpinBox:disabled,
+QDoubleSpinBox:disabled,
+QComboBox:disabled,
+QDateEdit:disabled,
+QTimeEdit:disabled,
+QDateTimeEdit:disabled
+{
+    background-color: %SURFACE%;
+    color: %TEXT_DISABLED%;
+    border-color: %BORDER%;
+}
+
+QLineEdit[readOnly="true"]
+{
+    background-color: %SURFACE2%;
+    color: %TEXT_DIM%;
+}
+
+QComboBox
+{
+    padding-right: 4px;
+}
+
+QComboBox::drop-down
+{
+    subcontrol-origin: padding;
+    subcontrol-position: top right;
+    width: 24px;
+    border: none;
+    background: transparent;
+}
+
+QComboBox::down-arrow
+{
+    image: url(%ARROW_DOWN%);
+    width: 10px;
+    height: 10px;
+}
+
+QComboBox::down-arrow:disabled
+{
+    image: url(%ARROW_DOWN%);
+}
+
+QComboBox QAbstractItemView
+{
+    background-color: %SURFACE2%;
+    color: %TEXT%;
+    border: 1px solid %BORDER_STRONG%;
+    border-radius: %RADIUS%;
+    selection-background-color: %ACCENT_SOFT%;
+    selection-color: %TEXT%;
+    padding: 4px;
+    outline: none;
+}
+
+QSpinBox::up-button,
+QDoubleSpinBox::up-button,
+QDateEdit::up-button,
+QTimeEdit::up-button,
+QDateTimeEdit::up-button
+{
+    subcontrol-origin: border;
+    subcontrol-position: top right;
+    width: 20px;
+    border-left: 1px solid %BORDER%;
+    border-top-right-radius: %RADIUS%;
+    background: %SURFACE2%;
+}
+
+QSpinBox::down-button,
+QDoubleSpinBox::down-button,
+QDateEdit::down-button,
+QTimeEdit::down-button,
+QDateTimeEdit::down-button
+{
+    subcontrol-origin: border;
+    subcontrol-position: bottom right;
+    width: 20px;
+    border-left: 1px solid %BORDER%;
+    border-bottom-right-radius: %RADIUS%;
+    background: %SURFACE2%;
+}
+
+QSpinBox::up-button:hover,
+QDoubleSpinBox::up-button:hover,
+QDateEdit::up-button:hover,
+QTimeEdit::up-button:hover,
+QDateTimeEdit::up-button:hover,
+QSpinBox::down-button:hover,
+QDoubleSpinBox::down-button:hover,
+QDateEdit::down-button:hover,
+QTimeEdit::down-button:hover,
+QDateTimeEdit::down-button:hover
+{
+    background: %SURFACE3%;
+}
+
+QSpinBox::up-arrow,
+QDoubleSpinBox::up-arrow,
+QDateEdit::up-arrow,
+QTimeEdit::up-arrow,
+QDateTimeEdit::up-arrow
+{
+    image: url(%ARROW_UP%);
+    width: 9px;
+    height: 9px;
+}
+
+QSpinBox::down-arrow,
+QDoubleSpinBox::down-arrow,
+QDateEdit::down-arrow,
+QTimeEdit::down-arrow,
+QDateTimeEdit::down-arrow
+{
+    image: url(%ARROW_DOWN%);
+    width: 9px;
+    height: 9px;
+}
+
+QSpinBox::up-arrow:disabled,
+QDoubleSpinBox::up-arrow:disabled,
+QDateEdit::up-arrow:disabled,
+QTimeEdit::up-arrow:disabled,
+QDateTimeEdit::up-arrow:disabled
+{
+    image: url(%ARROW_UP%);
+}
+
+QSpinBox::down-arrow:disabled,
+QDoubleSpinBox::down-arrow:disabled,
+QDateEdit::down-arrow:disabled,
+QTimeEdit::down-arrow:disabled,
+QDateTimeEdit::down-arrow:disabled
+{
+    image: url(%ARROW_DOWN%);
+}
+
+/* Check boxes and radio buttons */
+
+QCheckBox,
+QRadioButton
+{
+    spacing: 8px;
+    color: %TEXT%;
+    min-height: 22px;
+}
+
+QCheckBox:disabled,
+QRadioButton:disabled
+{
+    color: %TEXT_DISABLED%;
+}
+
+QCheckBox::indicator
+{
+    width: 18px;
+    height: 18px;
+    border: 1px solid %BORDER_STRONG%;
+    border-radius: 4px;
+    background: %SURFACE%;
+}
+
+QCheckBox::indicator:hover
+{
+    border-color: %ACCENT%;
+}
+
+QCheckBox::indicator:checked
+{
+    background: %ACCENT%;
+    border-color: %ACCENT%;
+    image: url(%CHECK%);
+}
+
+QCheckBox::indicator:disabled
+{
+    background: %SURFACE2%;
+    border-color: %BORDER%;
+}
+
+QCheckBox::indicator:checked:disabled
+{
+    background: %BORDER_STRONG%;
+    border-color: %BORDER_STRONG%;
+}
+
+/* ------------------------------------------------------------------ */
+/* Tabs                                                                */
+/* ------------------------------------------------------------------ */
+
+QTabWidget::pane
+{
+    border: none;
+    background: %BG%;
+}
+
+QTabBar
+{
+    background: transparent;
+}
+
+QTabBar::tab
+{
+    background: transparent;
+    color: %TEXT_DIM%;
+    border: 1px solid transparent;
+    border-radius: %RADIUS%;
+    padding: 7px 12px;
+    margin: 2px 1px;
+    min-height: 24px;
+}
+
+QTabBar::tab:hover
+{
+    background: %SURFACE2%;
+    color: %TEXT%;
+}
+
+QTabBar::tab:selected
+{
+    background: %ACCENT_SOFT%;
+    color: %TEXT%;
+    border-color: %ACCENT%;
+}
+
+QTabBar::tab:disabled
+{
+    color: %TEXT_DISABLED%;
+}
+
+/* ------------------------------------------------------------------ */
+/* Menus                                                               */
+/* ------------------------------------------------------------------ */
+
+QMenuBar
+{
+    background: %SURFACE%;
+    color: %TEXT%;
+    border-bottom: 1px solid %BORDER%;
+}
+
+QMenuBar::item
+{
+    background: transparent;
+    color: %TEXT_DIM%;
+    padding: 6px 10px;
+    border-radius: %RADIUS_SM%;
+}
+
+QMenuBar::item:selected
+{
+    background: %SURFACE3%;
+    color: %TEXT%;
+}
+
+QMenuBar::item:pressed
+{
+    background: %ACCENT_SOFT%;
+    color: %TEXT%;
+}
+
+QMenu
+{
+    background-color: %SURFACE2%;
+    color: %TEXT%;
+    border: 1px solid %BORDER_STRONG%;
+    border-radius: %RADIUS_LG%;
+    padding: 6px;
+}
+
+QMenu::item
+{
+    background: transparent;
+    border-radius: %RADIUS_SM%;
+    padding: 8px 30px 8px 30px;
+    min-height: 20px;
+}
+
+QMenu::item:selected
+{
+    background-color: %ACCENT_SOFT%;
+    color: %TEXT%;
+}
+
+QMenu::item:disabled
+{
+    color: %TEXT_DISABLED%;
+}
+
+QMenu::separator
+{
+    height: 1px;
+    background: %BORDER%;
+    margin: 6px 10px;
+}
+
+QMenu::icon
+{
+    padding-left: 4px;
+}
+
+QMenu::indicator
+{
+    width: 16px;
+    height: 16px;
+    margin-left: 6px;
+    subcontrol-origin: padding;
+    subcontrol-position: left center;
+}
+
+QMenu::indicator:checked
+{
+    background: %ACCENT%;
+    border: 1px solid %ACCENT%;
+    border-radius: 4px;
+    image: url(%CHECK%);
+}
+
+QMenu::right-arrow
+{
+    image: url(%ARROW_RIGHT%);
+    width: 10px;
+    height: 10px;
+}
+
+/* ------------------------------------------------------------------ */
+/* Tooltips                                                            */
+/* ------------------------------------------------------------------ */
+
+QToolTip
+{
+    background-color: %SURFACE3%;
+    color: %TEXT%;
+    border: 1px solid %BORDER_STRONG%;
+    border-radius: %RADIUS%;
+    padding: 7px 10px;
+}
+
+/* ------------------------------------------------------------------ */
+/* Item views and list rows                                            */
+/* ------------------------------------------------------------------ */
+
+QAbstractItemView
+{
+    background-color: %SURFACE%;
+    alternate-background-color: %SURFACE2%;
+    color: %TEXT%;
+    border: 1px solid %BORDER%;
+    border-radius: %RADIUS%;
+    selection-background-color: %ACCENT_SOFT%;
+    selection-color: %TEXT%;
+    outline: none;
+}
+
+QAbstractItemView::item
+{
+    padding: 5px 7px;
+    min-height: 24px;
+    border-radius: %RADIUS_SM%;
+}
+
+QAbstractItemView::item:hover
+{
+    background-color: %SURFACE3%;
+}
+
+QAbstractItemView::item:selected
+{
+    background-color: %ACCENT_SOFT%;
+    color: %TEXT%;
+}
+
+QListView::item
+{
+    border-left: 2px solid transparent;
+}
+
+QListView::item:selected
+{
+    border-left: 2px solid %ACCENT%;
+}
+
+QAbstractItemView::item:selected:!active
+{
+    background-color: %ACCENT_FAINT%;
+    color: %TEXT%;
+}
+
+QAbstractItemView:disabled
+{
+    color: %TEXT_DISABLED%;
+}
+
+QTreeView::branch
+{
+    background: transparent;
+}
+
+QTreeView::branch:has-children:!has-siblings:closed,
+QTreeView::branch:has-children:closed
+{
+    image: url(%ARROW_RIGHT%);
+}
+
+QTreeView::branch:has-children:!has-siblings:open,
+QTreeView::branch:has-children:open
+{
+    image: url(%ARROW_DOWN%);
+}
+
+QHeaderView
+{
+    background-color: %SURFACE%;
+    color: %TEXT_DIM%;
+    border: none;
+}
+
+QHeaderView::section
+{
+    background-color: %SURFACE%;
+    color: %TEXT_DIM%;
+    border: none;
+    border-right: 1px solid %BORDER%;
+    border-bottom: 1px solid %BORDER%;
+    padding: 7px 10px;
+    min-height: 24px;
+}
+
+QHeaderView::section:hover
+{
+    background-color: %SURFACE2%;
+    color: %TEXT%;
+}
+
+QHeaderView::section:last
+{
+    border-right: none;
+}
+
+QHeaderView::down-arrow
+{
+    image: url(%ARROW_DOWN%);
+    width: 9px;
+    height: 9px;
+}
+
+QHeaderView::up-arrow
+{
+    image: url(%ARROW_UP%);
+    width: 9px;
+    height: 9px;
+}
+
+QTableCornerButton::section
+{
+    background-color: %SURFACE%;
+    border: none;
+    border-right: 1px solid %BORDER%;
+    border-bottom: 1px solid %BORDER%;
+}
+
+/* ------------------------------------------------------------------ */
+/* Scroll bars                                                         */
+/* ------------------------------------------------------------------ */
+
+QScrollBar:vertical
+{
+    background: transparent;
+    width: 12px;
+    margin: 3px 2px;
+}
+
+QScrollBar::handle:vertical
+{
+    background: %BORDER_STRONG%;
+    min-height: 36px;
+    border-radius: 6px;
+}
+
+QScrollBar::handle:vertical:hover
+{
+    background: %TEXT_DIM%;
+}
+
+QScrollBar::handle:vertical:pressed
+{
+    background: %ACCENT%;
+}
+
+QScrollBar::add-line:vertical,
+QScrollBar::sub-line:vertical
+{
+    background: none;
+    border: none;
+    height: 0;
+}
+
+QScrollBar::add-page:vertical,
+QScrollBar::sub-page:vertical
+{
+    background: none;
+}
+
+QScrollBar:horizontal
+{
+    background: transparent;
+    height: 12px;
+    margin: 2px 3px;
+}
+
+QScrollBar::handle:horizontal
+{
+    background: %BORDER_STRONG%;
+    min-width: 36px;
+    border-radius: 6px;
+}
+
+QScrollBar::handle:horizontal:hover
+{
+    background: %TEXT_DIM%;
+}
+
+QScrollBar::handle:horizontal:pressed
+{
+    background: %ACCENT%;
+}
+
+QScrollBar::add-line:horizontal,
+QScrollBar::sub-line:horizontal
+{
+    background: none;
+    border: none;
+    width: 0;
+}
+
+QScrollBar::add-page:horizontal,
+QScrollBar::sub-page:horizontal
+{
+    background: none;
+}
+
+QScrollBar::corner
+{
+    background: transparent;
+}
+
+QScrollArea
+{
+    background: transparent;
+    border: none;
+}
+
+/* ------------------------------------------------------------------ */
+/* Sliders and progress bars                                           */
+/* ------------------------------------------------------------------ */
+
+QSlider::groove:horizontal
+{
+    height: 6px;
+    background: %SURFACE3%;
+    border-radius: 3px;
+}
+
+QSlider::sub-page:horizontal
+{
+    background: %ACCENT%;
+    border-radius: 3px;
+}
+
+QSlider::add-page:horizontal
+{
+    background: %SURFACE3%;
+    border-radius: 3px;
+}
+
+QSlider::handle:horizontal
+{
+    width: 16px;
+    height: 16px;
+    margin: -5px 0;
+    border-radius: 8px;
+    background: %TEXT%;
+    border: 1px solid %BORDER_STRONG%;
+}
+
+QSlider::handle:horizontal:hover
+{
+    background: %ACCENT%;
+    border-color: %ACCENT%;
+}
+
+QSlider::groove:vertical
+{
+    width: 6px;
+    background: %SURFACE3%;
+    border-radius: 3px;
+}
+
+QSlider::sub-page:vertical
+{
+    background: %SURFACE3%;
+    border-radius: 3px;
+}
+
+QSlider::add-page:vertical
+{
+    background: %ACCENT%;
+    border-radius: 3px;
+}
+
+QSlider::handle:vertical
+{
+    width: 16px;
+    height: 16px;
+    margin: 0 -5px;
+    border-radius: 8px;
+    background: %TEXT%;
+    border: 1px solid %BORDER_STRONG%;
+}
+
+QSlider::handle:vertical:hover
+{
+    background: %ACCENT%;
+    border-color: %ACCENT%;
+}
+
+QProgressBar
+{
+    background-color: %SURFACE3%;
+    color: %TEXT%;
+    border: none;
+    border-radius: 6px;
+    text-align: center;
+    min-height: 14px;
+}
+
+QProgressBar::chunk
+{
+    background-color: %ACCENT%;
+    border-radius: 6px;
+}
+
+/* ------------------------------------------------------------------ */
+/* Containers                                                          */
+/* ------------------------------------------------------------------ */
+
+QGroupBox
+{
+    background: %SURFACE%;
+    border: 1px solid %BORDER%;
+    border-radius: %RADIUS_LG%;
+    margin-top: 1.1em;
+    padding: 14px 12px 12px 12px;
+}
+
+QGroupBox::title
+{
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    left: 14px;
+    padding: 0 6px;
+    color: %TEXT_DIM%;
+    background: %BG%;
+}
+
+QSplitter::handle
+{
+    background: %BORDER%;
+}
+
+QSplitter::handle:horizontal
+{
+    width: 3px;
+}
+
+QSplitter::handle:vertical
+{
+    height: 3px;
+}
+
+QSplitter::handle:hover
+{
+    background: %ACCENT%;
+}
+
+/* ------------------------------------------------------------------ */
+/* Text areas                                                          */
+/* ------------------------------------------------------------------ */
+
+QTextEdit,
+QPlainTextEdit,
+QTextBrowser
+{
+    background-color: %SURFACE%;
+    color: %TEXT%;
+    border: 1px solid %BORDER%;
+    border-radius: %RADIUS%;
+    padding: 8px;
+    selection-background-color: %ACCENT%;
+    selection-color: %ACCENT_TEXT%;
+}
+
+QTextEdit:focus,
+QPlainTextEdit:focus,
+QTextBrowser:focus
+{
+    border-color: %ACCENT%;
+}
+
+QTextEdit:disabled,
+QPlainTextEdit:disabled,
+QTextBrowser:disabled
+{
+    color: %TEXT_DISABLED%;
+    border-color: %BORDER%;
+}
+
+QGroupBox QLabel
+{
+    background: transparent;
+    color: %TEXT%;
+}
+
+/* The internal editor of spin/date fields must not inherit the full text-field
+ * frame: that produced grey, apparently empty numeric inputs. */
+QSpinBox QLineEdit,
+QDoubleSpinBox QLineEdit,
+QDateEdit QLineEdit,
+QTimeEdit QLineEdit,
+QDateTimeEdit QLineEdit,
+QComboBox QLineEdit
+{
+    background: transparent;
+    color: %TEXT%;
+    border: none;
+    padding: 0;
+    selection-background-color: %ACCENT%;
+    selection-color: %ACCENT_TEXT%;
+}
+
+QToolButton#qt_toolbar_ext_button
+{
+    background-color: %SURFACE2%;
+    border: 1px solid %BORDER_STRONG%;
+    border-radius: %RADIUS_SM%;
+    color: %TEXT%;
+    width: 22px;
+    height: 22px;
+}
+
+/* ------------------------------------------------------------------ */
+/* Compact dropdowns, dialog inputs and dialog buttons                 */
+/* ------------------------------------------------------------------ */
+
+QComboBox
+{
+    padding: 4px 8px;
+    min-height: 20px;
+}
+
+QComboBox::drop-down
+{
+    width: 20px;
+}
+
+QComboBox QAbstractItemView
+{
+    padding: 2px;
+}
+
+QComboBox QAbstractItemView::item
+{
+    min-height: 20px;
+    padding: 3px 6px;
+}
+
+QDialog QSpinBox,
+QDialog QDoubleSpinBox,
+QDialog QDateEdit,
+QDialog QTimeEdit,
+QDialog QDateTimeEdit
+{
+    padding: 3px 6px;
+    min-height: 20px;
+}
+
+QDialog QSpinBox::up-button,
+QDialog QDoubleSpinBox::up-button,
+QDialog QDateEdit::up-button,
+QDialog QTimeEdit::up-button,
+QDialog QDateTimeEdit::up-button,
+QDialog QSpinBox::down-button,
+QDialog QDoubleSpinBox::down-button,
+QDialog QDateEdit::down-button,
+QDialog QTimeEdit::down-button,
+QDialog QDateTimeEdit::down-button
+{
+    width: 18px;
+}
+
+QDialog QPushButton
+{
+    padding: 5px 12px;
+    min-height: 20px;
+}
+
+QDialogButtonBox QPushButton,
+QMessageBox QPushButton
+{
+    min-width: 80px;
+    min-height: 30px;
+}
+
+QMenu
+{
+    padding: 4px;
+}
+
+QMenu::item
+{
+    padding: 6px 24px 6px 26px;
+    min-height: 18px;
+}
+
+/* Reserve room for the menu chevron only on buttons that actually have a
+ * menu attached. */
+QToolBar#commandBar QToolButton[uiHasMenu="true"]
+{
+    padding-right: 18px;
+}
+
+QTreeView::indicator,
+QTableView::indicator,
+QListView::indicator
+{
+    width: 20px;
+    height: 20px;
+}
+
+#pageActionBar
+{
+    min-height: 44px;
+}
+
+QToolBar#pageToolBar
+{
+    padding: 1px 0;
+    spacing: 1px;
+}
+
+QToolBar#pageToolBar QToolButton
+{
+    padding: 1px;
+}

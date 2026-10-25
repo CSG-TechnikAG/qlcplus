@@ -31,6 +31,7 @@
 #include <QByteArray>
 #include <QSettings>
 #include <QPainter>
+#include <QPainterPath>
 #include <QString>
 #include <QDebug>
 #include <QEvent>
@@ -56,6 +57,8 @@
 #include "mastertimer.h"
 #include "vcsoloframe.h"
 #include "vcbutton.h"
+#include "theme.h"
+#include "appicons.h"
 #include "function.h"
 #include "apputil.h"
 #include "chaser.h"
@@ -89,11 +92,11 @@ VCButton::VCButton(QWidget* parent, Doc* doc) : VCWidget(parent, doc)
     setFrameStyle(KVCFrameStyleNone);
 
     /* Menu actions */
-    m_chooseIconAction = new QAction(QIcon(":/image.png"), tr("Choose..."),
+    m_chooseIconAction = new QAction(AppIcons::icon("image", 24), tr("Choose..."),
                                      this);
     m_chooseIconAction->setShortcut(QKeySequence("SHIFT+C"));
 
-    m_resetIconAction = new QAction(QIcon(":/undo.png"), tr("None"), this);
+    m_resetIconAction = new QAction(AppIcons::icon("undo-2", 24), tr("None"), this);
     m_resetIconAction->setShortcut(QKeySequence("SHIFT+ALT+C"));
 
     connect(m_chooseIconAction, SIGNAL(triggered(bool)),
@@ -330,12 +333,12 @@ void VCButton::updateIcon()
 {
     if (m_action == Blackout)
     {
-        m_icon = QIcon(":/blackout.png");
+        m_icon = AppIcons::icon("blackout", 32);
         m_iconSize = QSize(26, 26);
     }
     else if (m_action == StopAll)
     {
-        m_icon = QIcon(":/panic.png");
+        m_icon = AppIcons::icon("octagon-x", 32);
         m_iconSize = QSize(26, 26);
     }
     else if (iconPath().isEmpty() == false)
@@ -1053,39 +1056,44 @@ bool VCButton::saveXML(QXmlStreamWriter *doc)
 
 void VCButton::paintEvent(QPaintEvent* e)
 {
-    QStyleOptionButton option;
-    option.initFrom(this);
+    Theme *theme = Theme::instance();
+    const QColor success = theme->color(Theme::Success);
+    const QColor danger = theme->color(Theme::Danger);
+    const QColor warning = theme->color(Theme::Warning);
+    const QColor border = theme->color(Theme::BorderStrong);
+    const QColor textDisabled = theme->color(Theme::TextDisabled);
 
-    /* This should look like a normal button */
-    option.features = QStyleOptionButton::None;
+    QColor bg = hasCustomBackgroundColor() ? backgroundColor()
+                                           : theme->color(Theme::SurfaceRaised);
+    QColor fg = hasCustomForegroundColor() ? foregroundColor()
+                                           : Theme::contrastingText(bg);
 
-    /* Sunken or raised based on state() status */
-    if (state() == Inactive)
-        option.state = QStyle::State_Raised;
-    else
-        option.state = QStyle::State_Sunken;
+    QColor stateColor = success;
+    if (m_flashForceLTP == true || m_flashOverrides == true)
+        stateColor = danger;
+    if (state() == Monitoring)
+        stateColor = warning;
 
-    /* Custom icons are always enabled, to see them in full color also in design mode */
-    if (m_action == Toggle || m_action == Flash)
-        option.state |= QStyle::State_Enabled;
-
-    /* Icon */
-    option.icon = m_icon;
-    option.iconSize = m_iconSize;
-
-    /* Paint the button */
     QPainter painter(this);
-    painter.setRenderHint(QPainter::Antialiasing);
+    painter.setRenderHint(QPainter::Antialiasing, true);
 
-    style()->drawControl(QStyle::CE_PushButton, &option, &painter, this);
+    const QRectF panel = QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5);
+    const qreal radius = 6.0;
+    QPainterPath panelPath;
+    panelPath.addRoundedRect(panel, radius, radius);
 
-    if (m_backgroundImage.isEmpty() == false)
+    QColor panelBorder = (state() == Inactive) ? border : stateColor;
+    painter.setPen(QPen(panelBorder, state() == Inactive ? 1.0 : 2.0));
+    painter.setBrush(bg);
+    painter.drawPath(panelPath);
+
+    /* Background image, clipped to the rounded panel. */
+    if (m_backgroundImage.isEmpty() == false && m_bgPixmap.isNull() == false)
     {
-        QRect pxRect = m_bgPixmap.rect();
-        // if the pixmap is bigger than the button, then paint a scaled version of it
-        // covering the whole button surface
-        // if the pixmap is smaller than the button, draw a centered pixmap
-        if (pxRect.contains(rect()))
+        painter.save();
+        painter.setClipPath(panelPath);
+        const QRect pxRect = m_bgPixmap.rect();
+        if (pxRect.contains(rect()) == true)
         {
             if (m_ledStyle == true)
                 painter.drawPixmap(rect(), m_bgPixmap);
@@ -1098,85 +1106,57 @@ void VCButton::paintEvent(QPaintEvent* e)
                                (height() - pxRect.height()) / 2,
                                m_bgPixmap);
         }
+        painter.restore();
     }
 
-    /* Paint caption with text wrapping */
-    if (caption().isEmpty() == false)
-    {
-        style()->drawItemText(&painter,
-                              rect(),
-                              Qt::AlignCenter | Qt::TextWordWrap,
-                              palette(),
-                              (mode() == Doc::Operate),
-                              caption());
-    }
+    /* Icon and wrapped caption through the platform label renderer so the
+     * existing button icon layout is preserved. */
+    QStyleOptionButton labelOption;
+    labelOption.initFrom(this);
+    labelOption.state = QStyle::State_Enabled;
+    labelOption.text = caption();
+    labelOption.icon = m_icon;
+    labelOption.iconSize = m_iconSize;
+    labelOption.palette.setColor(QPalette::ButtonText, fg);
+    labelOption.palette.setColor(QPalette::WindowText, fg);
+    style()->drawControl(QStyle::CE_PushButtonLabel, &labelOption, &painter, this);
 
     /* Flash emblem */
     if (m_action == Flash)
     {
-        QIcon icon(":/flash.png");
-        painter.drawPixmap(rect().width() - 18, 2,
-                           icon.pixmap(QSize(16, 16), QIcon::Normal, QIcon::On));
+        const QPixmap emblem = AppIcons::pixmap("zap", 16, warning,
+                                                painter.device()->devicePixelRatioF());
+        if (emblem.isNull() == false)
+            painter.drawPixmap(rect().width() - 20, 4, emblem);
     }
 
     if (m_ledStyle == true)
     {
-        painter.setPen(QPen(QColor(160, 160, 160, 255), 2));
-
+        QColor led = textDisabled;
         if (state() == Active)
-        {
-            if (m_flashForceLTP || m_flashOverrides)
-                painter.setBrush(QBrush(QColor(230, 0, 0, 255)));
-            else
-                painter.setBrush(QBrush(QColor(0, 230, 0, 255)));
-        }
+            led = stateColor;
         else if (state() == Monitoring)
-            painter.setBrush(QBrush(QColor(255, 170, 0, 255)));
-        else
-            painter.setBrush(QBrush(QColor(110, 110, 110, 255)));
+            led = warning;
 
+        painter.setPen(QPen(border, 1));
+        painter.setBrush(led);
         int dim = rect().width() / 6;
-        if (dim > 14) dim = 14;
-
-        painter.drawEllipse(6, 6, dim, dim);      // Style #1
-        //painter.drawRoundedRect(-1, -1, dim, dim, 3, 3);   // Style #2
+        if (dim > 14)
+            dim = 14;
+        painter.drawEllipse(6, 6, dim, dim);
     }
-    else
+    else if (state() != Inactive)
     {
-        // Style #3
+        const int borderWidth = (rect().width() > 80) ? 3 : 2;
+        painter.setPen(QPen(stateColor, borderWidth));
         painter.setBrush(Qt::NoBrush);
-
-        if (state() != Inactive)
-        {
-            int borderWidth = (rect().width() > 80)?3:2;
-            painter.setPen(QPen(QColor(20, 20, 20, 255), borderWidth * 2));
-            painter.drawRoundedRect(borderWidth, borderWidth,
-                                    rect().width() - borderWidth * 2, rect().height() - (borderWidth * 2),
-                                    borderWidth + 1,  borderWidth + 1);
-            if (state() == Monitoring)
-                painter.setPen(QPen(QColor(255, 170, 0, 255), borderWidth));
-            else
-            {
-                if (m_flashForceLTP || m_flashOverrides)
-                    painter.setPen(QPen(QColor(230, 0, 0, 255), borderWidth));
-                else
-                    painter.setPen(QPen(QColor(0, 230, 0, 255), borderWidth));
-            }
-            painter.drawRoundedRect(borderWidth, borderWidth,
-                                    rect().width() - borderWidth * 2, rect().height() - (borderWidth * 2),
-                                    borderWidth, borderWidth);
-        }
-        else
-        {
-            painter.setPen(QPen(QColor(160, 160, 160, 255), 3));
-            painter.drawRoundedRect(1, 1, rect().width() - 2, rect().height() - 2, 3, 3);
-        }
+        painter.drawRoundedRect(2, 2, rect().width() - 4, rect().height() - 4,
+                                5, 5);
     }
 
-    /* Stop painting here */
     painter.end();
 
-    /* Draw a selection frame if appropriate */
+    /* Draw selection frame and resize handle if appropriate */
     VCWidget::paintEvent(e);
 }
 

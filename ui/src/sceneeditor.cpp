@@ -44,6 +44,7 @@
 #include "qlcclipboard.h"
 #include "positiontool.h"
 #include "sceneeditor.h"
+#include "appicons.h"
 #include "qlcchannel.h"
 #include "chaserstep.h"
 #include "fixture.h"
@@ -180,34 +181,34 @@ void SceneEditor::init(bool applyValues)
     this->layout()->setContentsMargins(8, 3, 8, 3);
 
     /* Actions */
-    m_enableCurrentAction = new QAction(QIcon(":/check.png"),
+    m_enableCurrentAction = new QAction(AppIcons::icon("scene-check", 24),
                                         tr("Enable all channels in current fixture"), this);
-    m_disableCurrentAction = new QAction(QIcon(":/uncheck.png"),
+    m_disableCurrentAction = new QAction(AppIcons::icon("scene-uncheck", 24),
                                          tr("Disable all channels in current fixture"), this);
-    m_copyAction = new QAction(QIcon(":/editcopy.png"),
+    m_copyAction = new QAction(AppIcons::icon("scene-copy", 24),
                                tr("Copy current values to clipboard"), this);
-    m_pasteAction = new QAction(QIcon(":/editpaste.png"),
+    m_pasteAction = new QAction(AppIcons::icon("scene-paste", 24),
                                 tr("Paste clipboard values to current fixture"), this);
-    m_copyToAllAction = new QAction(QIcon(":/editcopyall.png"),
+    m_copyToAllAction = new QAction(AppIcons::icon("scene-copyall", 24),
                                     tr("Copy current values to all fixtures"), this);
-    m_colorToolAction = new QAction(QIcon(":/color.png"),
+    m_colorToolAction = new QAction(AppIcons::icon("scene-color", 24),
                                     tr("Color tool for CMY/RGB-capable fixtures"), this);
-    m_positionToolAction = new QAction(QIcon(":/xypad.png"),
+    m_positionToolAction = new QAction(AppIcons::icon("scene-xypad", 24),
                                     tr("Position tool for moving heads/scanners"), this);
-    m_tabViewAction = new QAction(QIcon(":/tabview.png"),
+    m_tabViewAction = new QAction(AppIcons::icon("scene-tabview", 24),
                                     tr("Switch between tab view and all channels view"), this);
-    m_blindAction = new QAction(QIcon(":/blind.png"),
+    m_blindAction = new QAction(AppIcons::icon("scene-blind", 24),
                                 tr("Toggle blind mode"), this);
-    m_speedDialAction = new QAction(QIcon(":/speed.png"),
+    m_speedDialAction = new QAction(AppIcons::icon("scene-speed", 24),
                                     tr("Show/Hide speed dial window"), this);
-    m_recordAction = new QAction(QIcon(":/record.png"),
+    m_recordAction = new QAction(AppIcons::icon("scene-record", 24),
                                  tr("Clone this scene and append as a new step to the selected chaser"), this);
 
-    m_nextTabAction = new QAction(QIcon(":/forward.png"), tr("Go to next fixture tab"), this);
+    m_nextTabAction = new QAction(AppIcons::icon("scene-forward", 24), tr("Go to next fixture tab"), this);
     m_nextTabAction->setShortcut(QKeySequence("Alt+Right"));
     connect(m_nextTabAction, SIGNAL(triggered(bool)),
             this, SLOT(slotGoToNextTab()));
-    m_prevTabAction = new QAction(QIcon(":/back.png"), tr("Go to previous fixture tab"), this);
+    m_prevTabAction = new QAction(AppIcons::icon("scene-back", 24), tr("Go to previous fixture tab"), this);
     m_prevTabAction->setShortcut(QKeySequence("Alt+Left"));
     connect(m_prevTabAction, SIGNAL(triggered(bool)),
             this, SLOT(slotGoToPreviousTab()));

@@ -21,7 +21,11 @@
 #include <QXmlStreamWriter>
 #include <QTreeWidgetItem>
 #include <QTextBrowser>
+#include <QEvent>
 #include <QVBoxLayout>
+#include <QHBoxLayout>
+#include <QFrame>
+#include <QSignalBlocker>
 #include <QTreeWidget>
 #include <QScrollArea>
 #include <QMessageBox>
@@ -48,6 +52,9 @@
 #include "channelsselection.h"
 #include "addchannelsgroup.h"
 #include "fixturemanager.h"
+#include "appicons.h"
+#include "appemptystate.h"
+#include "appsegmentedcontrol.h"
 #include "fixtureremap.h"
 #include "addrgbpanel.h"
 #include "addfixture.h"
@@ -74,10 +81,14 @@ FixtureManager::FixtureManager(QWidget* parent, Doc* doc)
     : QWidget(parent)
     , m_doc(doc)
     , m_splitter(NULL)
+    , m_viewTabs(NULL)
+    , m_viewSwitch(NULL)
+    , m_toolbar(NULL)
     , m_fixtures_tree(NULL)
     , m_channel_groups_tree(NULL)
     , m_rdmManager(NULL)
     , m_info(NULL)
+    , m_emptyState(NULL)
     , m_groupEditor(NULL)
     , m_currentTabIndex(0)
     , m_addAction(NULL)
@@ -101,8 +112,8 @@ FixtureManager::FixtureManager(QWidget* parent, Doc* doc)
     Q_ASSERT(doc != NULL);
 
     new QVBoxLayout(this);
-    layout()->setContentsMargins(0, 0, 0, 0);
-    layout()->setSpacing(0);
+    layout()->setContentsMargins(12, 8, 12, 10);
+    layout()->setSpacing(10);
 
     initActions();
     initToolBar();
@@ -210,6 +221,9 @@ void FixtureManager::slotChannelsGroupRemoved(quint32 id)
 
 void FixtureManager::slotModeChanged(Doc::Mode mode)
 {
+    if (m_emptyState != NULL)
+        m_emptyState->setActionEnabled(mode == Doc::Design);
+
     if (mode == Doc::Design)
     {
         int selected = m_fixtures_tree->selectedItems().size();
@@ -327,6 +341,9 @@ void FixtureManager::initDataView()
                               QSizePolicy::Expanding);
 
     QTabWidget *tabs = new QTabWidget(this);
+    tabs->tabBar()->hide();
+    tabs->setDocumentMode(true);
+    m_viewTabs = tabs;
     m_splitter->addWidget(tabs);
 
     /* Create a tree widget to the left part of the splitter */
@@ -379,6 +396,24 @@ void FixtureManager::initDataView()
             this, SLOT(slotDisplayFixtureInfo(QString&)));
 */
     connect(tabs, SIGNAL(currentChanged(int)), this, SLOT(slotTabChanged(int)));
+
+    if (m_viewSwitch != NULL)
+    {
+        m_viewSwitch->setCurrentIndex(0, false);
+        connect(m_viewSwitch, &AppSegmentedControl::currentChanged,
+                tabs, [tabs](int index)
+        {
+            tabs->setCurrentIndex(index);
+        });
+        connect(tabs, &QTabWidget::currentChanged, this, [this](int index)
+        {
+            if (m_viewSwitch != NULL)
+            {
+                QSignalBlocker blocker(m_viewSwitch);
+                m_viewSwitch->setCurrentIndex(index, true);
+            }
+        });
+    }
 
     /* Create the text view */
     createInfo();
@@ -501,6 +536,7 @@ void FixtureManager::fixtureSelected(quint32 id)
     if (m_info == NULL)
         createInfo();
 
+    hideEmptyState();
     m_info->setText(QString("%1<BODY>%2</BODY></HTML>")
                     .arg(fixtureInfoStyleSheetHeader())
                     .arg(fixtureInfo(fxi)));
@@ -515,6 +551,7 @@ void FixtureManager::fixtureGroupSelected(FixtureGroup* grp)
 
     if (m_info != NULL)
     {
+        m_emptyState = NULL;
         delete m_info;
         m_info = NULL;
     }
@@ -537,6 +574,7 @@ void FixtureManager::createInfo()
 
     if (m_info != NULL)
     {
+        m_emptyState = NULL;
         delete m_info;
         m_info = NULL;
     }
@@ -550,7 +588,50 @@ void FixtureManager::createInfo()
     m_info = new QTextBrowser(this);
     m_splitter->addWidget(m_info);
 
+    m_emptyState = new AppEmptyState(m_info->viewport());
+    m_emptyState->hide();
+    m_info->viewport()->installEventFilter(this);
+    connect(m_emptyState, &AppEmptyState::actionTriggered,
+            this, &FixtureManager::slotAdd);
+
     m_splitter->restoreState(state);
+}
+
+void FixtureManager::showEmptyState(const QString &title, const QString &description,
+                                    const QString &iconName, const QString &actionText)
+{
+    if (m_info == NULL)
+        createInfo();
+    if (m_emptyState == NULL)
+        return;
+
+    m_info->clear();
+    m_emptyState->setIcon(iconName);
+    m_emptyState->setTitle(title);
+    m_emptyState->setDescription(description);
+    m_emptyState->setActionText(actionText);
+    m_emptyState->setActionEnabled(m_doc->mode() == Doc::Design);
+    m_emptyState->setGeometry(m_info->viewport()->rect());
+    m_emptyState->show();
+    m_emptyState->raise();
+}
+
+void FixtureManager::hideEmptyState()
+{
+    if (m_emptyState != NULL)
+        m_emptyState->hide();
+}
+
+bool FixtureManager::eventFilter(QObject *watched, QEvent *event)
+{
+    if (m_info != NULL && m_emptyState != NULL && watched == m_info->viewport()
+        && (event->type() == QEvent::Resize || event->type() == QEvent::Show))
+    {
+        m_emptyState->setGeometry(m_info->viewport()->rect());
+        m_emptyState->raise();
+    }
+
+    return QWidget::eventFilter(watched, event);
 }
 
 void FixtureManager::slotSelectionChanged()
@@ -608,6 +689,7 @@ void FixtureManager::slotSelectionChanged()
 
             info += "</BODY></HTML>";
 
+            hideEmptyState();
             m_info->setText(info);
         }
     }
@@ -615,6 +697,8 @@ void FixtureManager::slotSelectionChanged()
     {
         // More than one or less than one selected
         QString info = "<HTML><BODY>";
+        bool useEmpty = false;
+        QString emptyTitle, emptyDescription, emptyIcon, emptyAction;
         if (selectedCount > 1)
         {
             // Enable removal of multiple items in design mode
@@ -656,25 +740,33 @@ void FixtureManager::slotSelectionChanged()
         }
         else
         {
+            useEmpty = true;
             if (m_fixtures_tree->topLevelItemCount() <= 0)
             {
-                info += tr("<H1>No fixtures</H1>" \
-                          "<P>Click <IMG SRC=\"" ":/edit_add.png\">" \
-                          " to add fixtures.</P>");
+                emptyTitle = tr("No fixtures yet");
+                emptyDescription = tr("Add your first fixture to start building your workspace.");
             }
             else
             {
-                info += tr("<H1>Nothing selected</H1>" \
-                          "<P>Select a fixture from the list or " \
-                          "click <IMG SRC=\"" ":/edit_add.png\">" \
-                          " to add fixtures.</P>");
+                emptyTitle = tr("No fixture selected");
+                emptyDescription = tr("Select a fixture from the list to inspect it, or add a new fixture.");
             }
+            emptyIcon = QStringLiteral("fixtures");
+            emptyAction = tr("Add fixture");
         }
         info += "</BODY></HTML>";
 
-        if (m_info == NULL)
-            createInfo();
-        m_info->setText(info);
+        if (useEmpty == true)
+        {
+            showEmptyState(emptyTitle, emptyDescription, emptyIcon, emptyAction);
+        }
+        else
+        {
+            hideEmptyState();
+            if (m_info == NULL)
+                createInfo();
+            m_info->setText(info);
+        }
     }
 
     // Enable/disable actions
@@ -698,6 +790,7 @@ void FixtureManager::slotChannelsGroupSelectionChanged()
         if (grpvar.isValid() == true)
         {
             ChannelsGroup *chGroup = m_doc->channelsGroup(grpvar.toUInt());
+            hideEmptyState();
             if (chGroup != NULL)
                 m_info->setText(QString("%1<BODY>%2</BODY></HTML>")
                                 .arg(channelsGroupInfoStyleSheetHeader())
@@ -717,6 +810,7 @@ void FixtureManager::slotChannelsGroupSelectionChanged()
     }
     else if (selectedCount > 1)
     {
+        hideEmptyState();
         m_info->setText(tr("<HTML><BODY><H1>Multiple groups selected</H1>" \
                   "<P>Click <IMG SRC=\"" ":/edit_remove.png\">" \
                   " to remove the selected groups.</P></BODY></HTML>"));
@@ -725,10 +819,9 @@ void FixtureManager::slotChannelsGroupSelectionChanged()
     }
     else
     {
-        m_info->setText(tr("<HTML><BODY><H1>Nothing selected</H1>" \
-                  "<P>Select a channel group from the list or " \
-                  "click <IMG SRC=\"" ":/edit_add.png\">" \
-                  " to add a new channels group.</P></BODY></HTML>"));
+        showEmptyState(tr("No channel group selected"),
+                       tr("Select a channel group to edit it, or add a new group."),
+                       QStringLiteral("folder"), tr("Add group"));
         m_removeAction->setEnabled(false);
         m_propertiesAction->setEnabled(false);
     }
@@ -750,17 +843,20 @@ void FixtureManager::slotTabChanged(int index)
 {
     if (index == 1)
     {
+        m_addAction->setIcon(AppIcons::icon("folder-add", 24));
         m_addAction->setToolTip(tr("Add group..."));
         updateChannelsGroupView();
         slotChannelsGroupSelectionChanged();
     }
     else if (index == 2)
     {
+        m_addAction->setIcon(AppIcons::icon("fixtures-add", 24));
         m_addAction->setToolTip(tr("Add fixture..."));
         updateRDMView();
     }
     else
     {
+        m_addAction->setIcon(AppIcons::icon("fixtures-add", 24));
         m_addAction->setToolTip(tr("Add fixture..."));
         updateView();
         slotSelectionChanged();
@@ -1078,66 +1174,66 @@ QString FixtureManager::channelsGroupInfo(const ChannelsGroup *channelsGroup) co
 void FixtureManager::initActions()
 {
     // Fixture actions
-    m_addAction = new QAction(QIcon(":/edit_add.png"),
+    m_addAction = new QAction(AppIcons::icon("fixtures-add", 24),
                               tr("Add fixture..."), this);
     connect(m_addAction, SIGNAL(triggered(bool)),
             this, SLOT(slotAdd()));
 
-    m_addRGBAction = new QAction(QIcon(":/rgbpanel.png"),
+    m_addRGBAction = new QAction(AppIcons::icon("rgbmatrix", 24),
                               tr("Add RGB panel..."), this);
     connect(m_addRGBAction, SIGNAL(triggered(bool)),
             this, SLOT(slotAddRGBPanel()));
 
-    m_removeAction = new QAction(QIcon(":/edit_remove.png"),
+    m_removeAction = new QAction(AppIcons::icon("trash-2", 24),
                                  tr("Delete items"), this);
     connect(m_removeAction, SIGNAL(triggered(bool)),
             this, SLOT(slotRemove()));
 
-    m_propertiesAction = new QAction(QIcon(":/configure.png"),
+    m_propertiesAction = new QAction(AppIcons::icon("settings-2", 24),
                                      tr("Properties..."), this);
     connect(m_propertiesAction, SIGNAL(triggered(bool)),
             this, SLOT(slotProperties()));
 
-    m_fadeConfigAction = new QAction(QIcon(":/fade.png"),
+    m_fadeConfigAction = new QAction(AppIcons::icon("appearance", 24),
                                      tr("Channels Fade Configuration..."), this);
     connect(m_fadeConfigAction, SIGNAL(triggered(bool)),
             this, SLOT(slotFadeConfig()));
 
     // Group actions
-    m_groupAction = new QAction(QIcon(":/group.png"),
+    m_groupAction = new QAction(AppIcons::icon("folder-plus", 24),
                                 tr("Add fixture to group..."), this);
 
-    m_unGroupAction = new QAction(QIcon(":/ungroup.png"),
+    m_unGroupAction = new QAction(AppIcons::icon("unlink", 24),
                                 tr("Remove fixture from group"), this);
     connect(m_unGroupAction, SIGNAL(triggered(bool)),
             this, SLOT(slotUnGroup()));
 
     m_newGroupAction = new QAction(tr("New Group..."), this);
 
-    m_moveUpAction = new QAction(QIcon(":/up.png"),
+    m_moveUpAction = new QAction(AppIcons::icon("arrow-up", 24),
                                  tr("Move channel group up..."), this);
     m_moveUpAction->setEnabled(false);
     connect(m_moveUpAction, SIGNAL(triggered(bool)),
             this, SLOT(slotMoveGroupUp()));
 
-    m_moveDownAction = new QAction(QIcon(":/down.png"),
+    m_moveDownAction = new QAction(AppIcons::icon("arrow-down", 24),
                                  tr("Move channel group down..."), this);
     m_moveDownAction->setEnabled(false);
     connect(m_moveDownAction, SIGNAL(triggered(bool)),
             this, SLOT(slotMoveGroupDown()));
 
-    m_importAction = new QAction(QIcon(":/fileimport.png"),
+    m_importAction = new QAction(AppIcons::icon("download", 24),
                                  tr("Import fixtures..."), this);
     connect(m_importAction, SIGNAL(triggered(bool)),
             this, SLOT(slotImport()));
 
-    m_exportAction = new QAction(QIcon(":/fileexport.png"),
+    m_exportAction = new QAction(AppIcons::icon("upload", 24),
                                  tr("Export fixtures..."), this);
 
     connect(m_exportAction, SIGNAL(triggered(bool)),
             this, SLOT(slotExport()));
 
-    m_remapAction = new QAction(QIcon(":/remap.png"),
+    m_remapAction = new QAction(AppIcons::icon("shuffle", 24),
                                tr("Remap fixtures..."), this);
     connect(m_remapAction, SIGNAL(triggered(bool)),
             this, SLOT(slotRemap()));
@@ -1171,29 +1267,48 @@ void FixtureManager::updateGroupMenu()
 
 void FixtureManager::initToolBar()
 {
-    QToolBar* toolbar = new QToolBar(tr("Fixture manager"), this);
-    toolbar->setFloatable(false);
-    toolbar->setMovable(false);
-    layout()->setMenuBar(toolbar);
-    toolbar->addAction(m_addAction);
-    toolbar->addAction(m_addRGBAction);
-    toolbar->addAction(m_removeAction);
-    toolbar->addAction(m_propertiesAction);
-    toolbar->addAction(m_fadeConfigAction);
-    toolbar->addSeparator();
-    toolbar->addAction(m_groupAction);
-    toolbar->addAction(m_unGroupAction);
-    toolbar->addSeparator();
-    toolbar->addAction(m_moveUpAction);
-    toolbar->addAction(m_moveDownAction);
-    toolbar->addSeparator();
-    toolbar->addAction(m_importAction);
-    toolbar->addAction(m_exportAction);
-    toolbar->addAction(m_remapAction);
+    QFrame *actionBar = new QFrame(this);
+    actionBar->setObjectName("pageActionBar");
+    actionBar->setFixedHeight(48);
+    QHBoxLayout *barLayout = new QHBoxLayout(actionBar);
+    barLayout->setContentsMargins(6, 4, 6, 4);
+    barLayout->setSpacing(6);
 
-    QToolButton* btn = qobject_cast<QToolButton*> (toolbar->widgetForAction(m_groupAction));
+    m_viewSwitch = new AppSegmentedControl(actionBar);
+    m_viewSwitch->addSegment(tr("Fixtures"), "fixtures");
+    m_viewSwitch->addSegment(tr("Channel Groups"), "folder");
+    m_viewSwitch->setMinimumWidth(300);
+    m_viewSwitch->setMaximumWidth(340);
+    m_viewSwitch->setFixedHeight(34);
+    m_toolbar = new QToolBar(tr("Fixture manager"), actionBar);
+    m_toolbar->setObjectName("pageToolBar");
+    m_toolbar->setIconSize(QSize(24, 24));
+    m_toolbar->setFloatable(false);
+    m_toolbar->setMovable(false);
+    m_toolbar->addAction(m_addAction);
+    m_toolbar->addAction(m_addRGBAction);
+    m_toolbar->addAction(m_removeAction);
+    m_toolbar->addAction(m_propertiesAction);
+    m_toolbar->addAction(m_fadeConfigAction);
+    m_toolbar->addSeparator();
+    m_toolbar->addAction(m_groupAction);
+    m_toolbar->addAction(m_unGroupAction);
+    m_toolbar->addSeparator();
+    m_toolbar->addAction(m_moveUpAction);
+    m_toolbar->addAction(m_moveDownAction);
+    m_toolbar->addSeparator();
+    m_toolbar->addAction(m_importAction);
+    m_toolbar->addAction(m_exportAction);
+    m_toolbar->addAction(m_remapAction);
+
+    QToolButton* btn = qobject_cast<QToolButton*> (m_toolbar->widgetForAction(m_groupAction));
     Q_ASSERT(btn != NULL);
     btn->setPopupMode(QToolButton::InstantPopup);
+
+    barLayout->addWidget(m_toolbar);
+    barLayout->addStretch(1);
+    barLayout->addWidget(m_viewSwitch);
+    static_cast<QVBoxLayout *>(layout())->addWidget(actionBar);
 }
 
 void FixtureManager::addFixture()

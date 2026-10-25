@@ -150,9 +150,12 @@ void GenericDMXSource::writeDMX(MasterTimer* timer, QList<Universe *> ua)
         while (it.hasNext() == true)
         {
             it.next();
-            quint32 universe = it.key();
             QSharedPointer<GenericFader> fader = it.value();
-            ua[universe]->dismissFader(fader);
+            if (!fader.isNull())
+            {
+                fader->setEnabled(false);
+                fader->requestDelete();
+            }
         }
         m_fadersMap.clear();
     }

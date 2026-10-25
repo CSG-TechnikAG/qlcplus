@@ -9,9 +9,57 @@
 
 <H1>GUI style customization</H1>
 
-<P>Starting from version 4.5.0, QLC+ can read a user custom file to change the GUI
-appearance in a very accessible way.<BR>
-If no file is found, QLC+ will start with the default style.</P>
+<H2>Built-in themes</H2>
+
+<P>Starting from version 4.16, QLC+ 4 ships with a new application shell, a modern
+icon set based on the original QLC+ iconography, the Inter typeface and four
+selectable themes. Click the
+<B>Appearance</B> button in the top command bar (the palette icon) to change them at
+runtime:</P>
+
+<UL>
+ <LI><b>Midnight</b>: the default. Layered near-black surfaces, subdued borders and the
+     QLC+ blue accent. Designed for long operating sessions and dark stages.</LI>
+ <LI><b>Daylight</b>: a clean light theme with the same shell, spacing and accent system.</LI>
+ <LI><b>OLED</b>: true black backgrounds for OLED panels and very dark environments.</LI>
+ <LI><b>Classic</b>: restores the stock Qt/platform widget look used before
+     version 4.16. The new navigation shell remains, without motion.</LI>
+</UL>
+
+<P>The top command bar keeps file, monitor, live edit, panic, blackout and the
+Design/Operate switch within reach, while a navigation rail replaces the old bottom
+tab strip. The navigation can be placed on the left as a sidebar or along the bottom
+edge. Choose <B>Navigation &rarr; Sidebar</B> or <B>Navigation &rarr; Bottom bar</B>
+from the Appearance menu, or use the Navigation section in
+<B>Appearance settings...</B>. The choice is saved in the workspace and restored on
+the next start; the active indicator, hover animation and page transitions are kept
+in both positions. Opening the command palette with <CODE>Ctrl+Shift+P</CODE> or the
+search button gives keyboard access to every action.</P>
+
+<P>Icons are based on the original QLC+ iconography and restyled as clean flat shapes.
+Their original colour identity is preserved, so fixtures, lamp types, functions, shows,
+the Virtual Console, Inputs/Outputs, the address tool, DMX dump, fixtures monitor and
+blackout remain easy to recognise. Generic actions stay monochrome. Neutral outlines and
+the surrounding pill follow hover, selection and disabled state plus the selected theme,
+while the coloured parts of the legacy icons keep their identity. The original QLC+ logo
+is kept in the header.</P>
+
+<P>The OLED theme uses pure black for the main window, command bar, navigation rail and
+page surfaces, so large areas of the screen are actually off on OLED panels. Raised
+elements such as menus and dialogs remain slightly lighter for depth and readability.</P>
+
+<P>The <B>Appearance settings...</B> dialog groups the four themes, the accent color
+presets and custom picker, the navigation position, the <B>Animated effects</B> toggle
+for hover fades, ripples, page transitions and navigation motion, and the custom
+stylesheet shortcuts. All choices are stored in the QLC+ settings and restored on the
+next start.</P>
+
+<H2>User stylesheet overrides</H2>
+
+<P>Starting from version 4.5.0, QLC+ can also read a user custom file to change the GUI
+appearance in a very accessible way. The user stylesheet is applied on top of the
+selected built-in theme, so it can override individual components.<BR>
+If no file is found, QLC+ will start with the selected built-in theme.</P>
 
 <H2>The GUI style file</H2>
 
@@ -22,6 +70,12 @@ The style file must also be placed in a specific path which is:<BR>
  <LI><b>Windows</b>: Your user folder/QLC+</LI>
  <LI><b>OSX</b>: Library/Application Support/QLC+</LI>
 </UL>
+
+The <B>Appearance</B> menu provides <B>Open custom stylesheet folder</B> and
+<B>Reload custom stylesheet</B> entries to edit and apply the file without restarting QLC+.
+The <CODE>MAIN</CODE> section is reloaded immediately; component specific sections (for
+example the Virtual Console or Simple Desk sections) are applied when their widgets are
+created, so restart QLC+ to refresh those.<BR><BR>
 
 The style file must have a CSS syntax. If you're comfortable with web designing, you should
 find the creation of this file very easy!<BR>

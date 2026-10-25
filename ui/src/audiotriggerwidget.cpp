@@ -22,6 +22,7 @@
 #include <qmath.h>
 
 #include "audiotriggerwidget.h"
+#include "theme.h"
 #include "qlcmacros.h"
 
 AudioTriggerWidget::AudioTriggerWidget(QWidget *parent) :
@@ -101,30 +102,30 @@ void AudioTriggerWidget::paintEvent(QPaintEvent *e)
 
     QPainter painter(this);
 
+    Theme *theme = Theme::instance();
+
     // fill spectrum background
-    painter.setPen(QPen(Qt::darkGray, 2));
-    if (this->isEnabled())
-        painter.setBrush(QBrush(Qt::black));
-    else
-        painter.setBrush(QBrush(Qt::gray));
+    painter.setPen(QPen(theme->color(Theme::BorderStrong), 1));
+    painter.setBrush(this->isEnabled() ? theme->color(Theme::Background)
+                                       : theme->color(Theme::SurfaceRaised));
     painter.drawRect(0, 0, m_barWidth * m_barsNumber, m_spectrumHeight);
 
     // fill volume bar background
-    painter.setBrush(QBrush(Qt::lightGray));
+    painter.setBrush(theme->color(Theme::SurfaceHover));
     painter.drawRect(width() - m_barWidth, 0, m_barWidth, m_spectrumHeight);
 
     // fill frequencies background
-    painter.setBrush(QBrush(Qt::darkGray));
+    painter.setBrush(theme->color(Theme::SurfaceRaised));
     painter.drawRect(0, m_spectrumHeight + 1, width(), 20);
 
     float xpos = 1;
-    painter.setBrush(QBrush(Qt::yellow));
+    painter.setBrush(theme->color(Theme::Accent));
 
     for (int i = 0; i < m_barsNumber; i++)
     {
         painter.setPen(QPen(Qt::NoPen));
         painter.drawRect(xpos, m_spectrumHeight - m_spectrumBands[i], m_barWidth - 1, m_spectrumBands[i]);
-        painter.setPen(QPen(Qt::lightGray, 1));
+        painter.setPen(QPen(theme->color(Theme::Border), 1));
         painter.drawLine(xpos + m_barWidth, 0, xpos + m_barWidth, m_spectrumHeight - 2);
 
         xpos += m_barWidth;
@@ -132,10 +133,8 @@ void AudioTriggerWidget::paintEvent(QPaintEvent *e)
 
     // draw frequencies scale
     float freqIncr = m_maxFrequency / 10;
-    if (this->isEnabled())
-        painter.setPen(QPen(Qt::black, 1));
-    else
-        painter.setPen(QPen(Qt::gray, 1));
+    painter.setPen(QPen(this->isEnabled() ? theme->color(Theme::Text)
+                                          : theme->color(Theme::TextDisabled), 1));
 
     for (int i = 1; i < 11; i++)
     {
@@ -147,6 +146,7 @@ void AudioTriggerWidget::paintEvent(QPaintEvent *e)
     //painter.drawText(width() - 15, height() - 5, "V");
 
     painter.setPen(QPen(Qt::NoPen));
-    painter.setBrush(QBrush(Qt::green));
-    painter.drawRect(width() - m_barWidth + 1, m_spectrumHeight - m_volumeBarHeight, m_barWidth - 2, m_volumeBarHeight);
+    painter.setBrush(theme->color(Theme::Success));
+    painter.drawRect(width() - m_barWidth + 1, m_spectrumHeight - m_volumeBarHeight,
+                     m_barWidth - 2, m_volumeBarHeight);
 }

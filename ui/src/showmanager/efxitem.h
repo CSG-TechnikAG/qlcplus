@@ -49,7 +49,7 @@ public:
     void paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget) override;
 
     /** @reimp */
-    void setTimeScale(int val) override;
+    void setTimeScale(qreal val) override;
 
     /** @reimp */
     void setDuration(quint32 msec, bool stretch) override;
@@ -73,6 +73,9 @@ protected slots:
 private:
     /** Calculate sequence width for paint() and boundingRect() */
     void calculateWidth();
+
+    /** Duration of one rendered EFX loop (clip override or source) */
+    quint32 stepDuration() const;
 
 private:
     /** Reference to the actual EFX Function */

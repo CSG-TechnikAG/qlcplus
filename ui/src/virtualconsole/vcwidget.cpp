@@ -30,6 +30,7 @@
 #include <QMouseEvent>
 #include <QMetaObject>
 #include <QPainter>
+#include <QPainterPath>
 #include <QPalette>
 #include <QCursor>
 #include <QPixmap>
@@ -48,6 +49,7 @@
 #include "virtualconsole.h"
 #include "inputpatch.h"
 #include "vcwidget.h"
+#include "theme.h"
 #include "doc.h"
 
 #define GRID_RESOLUTION 5
@@ -1315,45 +1317,47 @@ void VCWidget::paintEvent(QPaintEvent* e)
     if (vc == NULL)
         return;
 
+    Theme *theme = Theme::instance();
     QPainter painter(this);
+    painter.setRenderHint(QPainter::Antialiasing, true);
 
-    /* Draw frame according to style */
-    QStyleOptionFrame option;
-    option.initFrom(this);
-
-    if (frameStyle() == KVCFrameStyleSunken)
-        option.state = QStyle::State_Sunken;
-    else if (frameStyle() == KVCFrameStyleRaised)
-        option.state = QStyle::State_Raised;
-    else
-        option.state = QStyle::State_None;
-
-    if (mode() == Doc::Design)
-        option.state |= QStyle::State_Enabled;
-
-    /* Draw a frame border if such is specified for this widget */
-    if (option.state != QStyle::State_None)
-        style()->drawPrimitive(QStyle::PE_Frame, &option, &painter, this);
+    /* Flat, rounded frame instead of the platform 3D frame. */
+    if (frameStyle() != KVCFrameStyleNone)
+    {
+        QColor frameColor = theme->color(Theme::BorderStrong);
+        if (frameStyle() == KVCFrameStyleSunken)
+            frameColor = theme->color(Theme::Border);
+        painter.setPen(QPen(frameColor, 1));
+        painter.setBrush(Qt::NoBrush);
+        painter.drawRoundedRect(QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5),
+                                5, 5);
+    }
 
     QWidget::paintEvent(e);
 
     /* Draw selection frame */
     if (mode() == Doc::Design && vc->isWidgetSelected(this) == true)
     {
-        /* Draw a dotted line around the widget */
-        QPen pen(Qt::DashLine);
-        pen.setColor(Qt::blue);
+        const QColor accent = theme->accent();
+        QPen pen(accent, 1, Qt::DashLine);
+        pen.setDashPattern(QVector<qreal>() << 4 << 3);
         pen.setCapStyle(Qt::RoundCap);
-        pen.setWidth(0);
         painter.setPen(pen);
-        painter.drawRect(0, 0, rect().width() - 1, rect().height() - 1);
+        painter.setBrush(Qt::NoBrush);
+        painter.drawRoundedRect(QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5),
+                                5, 5);
 
-        /* Draw a resize handle */
+        /* Modern corner grip instead of the legacy resize pixmap. */
         if (allowResize() == true)
         {
-            QIcon icon(":/resize.png");
-            painter.drawPixmap(rect().width() - 16, rect().height() - 16,
-                               icon.pixmap(QSize(16, 16), QIcon::Normal, QIcon::On));
+            QPainterPath grip;
+            grip.moveTo(width() - 15, height() - 4);
+            grip.lineTo(width() - 4, height() - 15);
+            grip.lineTo(width() - 4, height() - 4);
+            grip.closeSubpath();
+            painter.setPen(Qt::NoPen);
+            painter.setBrush(accent);
+            painter.drawPath(grip);
         }
     }
 }

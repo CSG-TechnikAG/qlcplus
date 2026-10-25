@@ -58,11 +58,11 @@ void EFXItem::calculateWidth()
     }
     else
     {
-        newWidth = (timeUnit * float(efxDuration)) / 1000.0;
+        newWidth = qRound((timeUnit * float(efxDuration)) / 1000.0);
     }
 
-    if (newWidth < timeUnit)
-        newWidth = timeUnit;
+    if (newWidth < qRound(timeUnit))
+        newWidth = qRound(timeUnit);
 
     setWidth(newWidth);
 }
@@ -77,15 +77,19 @@ void EFXItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, Q
 
     ShowItem::paint(painter, option, widget);
 
+    const quint32 step = stepDuration();
     int loopCount = 0;
-    if (getDuration() == Function::infiniteSpeed())
-        loopCount = 10000 / m_efx->duration();
-    else if (getDuration() > 0)
-        loopCount = qFloor(getDuration() / m_efx->duration());
+    if (step > 0)
+    {
+        if (getDuration() == Function::infiniteSpeed())
+            loopCount = 10000 / step;
+        else if (getDuration() > 0)
+            loopCount = qFloor(getDuration() / step);
+    }
 
     for (int i = 0; i < loopCount; i++)
     {
-        xpos += ((timeUnit * float(m_efx->duration())) / 1000);
+        xpos += ((timeUnit * float(step)) / 1000);
         // draw loop vertical delimiter
         painter->setPen(QPen(Qt::white, 1));
         painter->drawLine(int(xpos), 1, int(xpos), TRACK_HEIGHT - 5);
@@ -94,7 +98,7 @@ void EFXItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, Q
     ShowItem::postPaint(painter);
 }
 
-void EFXItem::setTimeScale(int val)
+void EFXItem::setTimeScale(qreal val)
 {
     ShowItem::setTimeScale(val);
     calculateWidth();
@@ -102,18 +106,24 @@ void EFXItem::setTimeScale(int val)
 
 void EFXItem::setDuration(quint32 msec, bool stretch)
 {
-    if (stretch == true)
-    {
-        m_efx->setDuration(msec);
-    }
-    else
-    {
-        if (m_function)
-            m_function->setDuration(msec);
-        prepareGeometryChange();
-        calculateWidth();
-        updateTooltip();
-    }
+    ShowItem::setDuration(msec, stretch);
+    prepareGeometryChange();
+    calculateWidth();
+    update();
+}
+
+quint32 EFXItem::stepDuration() const
+{
+    if (m_function == NULL)
+        return m_efx->duration();
+
+    if (m_function->functionSpeed() > 0)
+        return m_function->functionSpeed();
+
+    if (m_function->stretch() == true && m_function->duration() > 0)
+        return m_function->duration();
+
+    return m_efx->duration();
 }
 
 quint32 EFXItem::getDuration() const

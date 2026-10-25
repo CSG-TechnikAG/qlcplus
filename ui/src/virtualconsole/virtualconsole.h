@@ -148,6 +148,7 @@ protected:
 
 protected:
     QToolBar* m_toolbar;
+    QFrame* m_editBar;
 
     QActionGroup* m_addActionGroup;
     QActionGroup* m_editActionGroup;

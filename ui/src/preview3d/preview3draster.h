@@ -60,8 +60,6 @@ public:
     void setAdditive(bool on) { m_additive = on; }
 
 private:
-    void blend(int x, int y, float iw, const QColor &color);
-
     int m_ss;
     int m_w, m_h;                 // supersampled dimensions
     QImage m_img;

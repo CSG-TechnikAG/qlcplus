@@ -22,6 +22,7 @@
 
 #include "showrunner.h"
 #include "function.h"
+#include "showfunction.h"
 #include "track.h"
 #include "show.h"
 #include "doc.h"
@@ -129,6 +130,8 @@ ShowRunner::ShowRunner(const Doc* doc, quint32 showID, quint32 startTime)
 
 ShowRunner::~ShowRunner()
 {
+    if (m_runningQueue.isEmpty() == false)
+        stop();
 }
 
 void ShowRunner::start()
@@ -139,10 +142,7 @@ void ShowRunner::start()
 void ShowRunner::setPause(bool enable)
 {
     for (int i = 0; i < m_runningQueue.count(); i++)
-    {
-        Function *f = m_runningQueue.at(i).first;
-        f->setPause(enable);
-    }
+        m_runningQueue.at(i).function->setPause(enable);
 }
 
 void ShowRunner::stop()
@@ -154,8 +154,8 @@ void ShowRunner::stop()
 
     for (int i = 0; i < m_runningQueue.count(); i++)
     {
-        Function *f = m_runningQueue.at(i).first;
-        f->stop(functionParent());
+        RunningFunction running = m_runningQueue.at(i);
+        running.function->stop(functionParent());
     }
 
     m_runningQueue.clear();
@@ -165,6 +165,42 @@ void ShowRunner::stop()
 FunctionParent ShowRunner::functionParent() const
 {
     return FunctionParent(FunctionParent::Function, m_show->id());
+}
+
+Function *ShowRunner::runtimeFunctionFor(ShowFunction *sf, Function *source)
+{
+    if (sf != NULL && sf->runtimeFunction() != NULL)
+        return sf->runtimeFunction();
+    return source;
+}
+
+void ShowRunner::startShowFunction(ShowFunction *sf, Function *source, quint32 timeOffset)
+{
+    if (sf == NULL || source == NULL)
+        return;
+
+    Function *runtime = runtimeFunctionFor(sf, source);
+    if (runtime == NULL)
+        return;
+
+    foreach (Track *track, m_show->tracks())
+    {
+        if (track->showFunctions().contains(sf))
+        {
+            int intOverrideId = runtime->requestAttributeOverride(Function::Intensity,
+                                                                  m_intensityMap[track->id()]);
+            sf->setIntensityOverrideId(intOverrideId);
+            break;
+        }
+    }
+
+    runtime->start(m_doc->masterTimer(), functionParent(), timeOffset);
+
+    RunningFunction running;
+    running.function = runtime;
+    running.showFunction = sf;
+    running.stopTime = sf->startTime() + sf->duration(m_doc);
+    m_runningQueue.append(running);
 }
 
 void ShowRunner::write(MasterTimer *timer)
@@ -223,19 +259,7 @@ void ShowRunner::write(MasterTimer *timer)
         }
         if (m_elapsedTime >= funcStartTime)
         {
-            foreach (Track *track, m_show->tracks())
-            {
-                if (track->showFunctions().contains(sf))
-                {
-                    int intOverrideId = f->requestAttributeOverride(Function::Intensity, m_intensityMap[track->id()]);
-                    //f->adjustAttribute(m_intensityMap[track->id()], Function::Intensity);
-                    sf->setIntensityOverrideId(intOverrideId);
-                    break;
-                }
-            }
-
-            f->start(m_doc->masterTimer(), functionParent(), functionTimeOffset);
-            m_runningQueue.append(QPair<Function *, quint32>(f, sf->startTime() + sf->duration(m_doc)));
+            startShowFunction(sf, f, functionTimeOffset);
             m_currentTimeFunctionIndex++;
         }
         else
@@ -270,19 +294,7 @@ void ShowRunner::write(MasterTimer *timer)
         }
         if (m_elapsedBeats >= funcStartTime)
         {
-            foreach (Track *track, m_show->tracks())
-            {
-                if (track->showFunctions().contains(sf))
-                {
-                    int intOverrideId = f->requestAttributeOverride(Function::Intensity, m_intensityMap[track->id()]);
-                    //f->adjustAttribute(m_intensityMap[track->id()], Function::Intensity);
-                    sf->setIntensityOverrideId(intOverrideId);
-                    break;
-                }
-            }
-
-            f->start(m_doc->masterTimer(), functionParent(), functionTimeOffset);
-            m_runningQueue.append(QPair<Function *, quint32>(f, sf->startTime() + sf->duration(m_doc)));
+            startShowFunction(sf, f, functionTimeOffset);
             m_currentBeatFunctionIndex++;
         }
         else
@@ -295,15 +307,15 @@ void ShowRunner::write(MasterTimer *timer)
     // 2- to avoid messing up with indices when an entry is removed
     for (int i = m_runningQueue.count() - 1; i >= 0; i--)
     {
-        Function *func = m_runningQueue.at(i).first;
-        quint32 stopTime = m_runningQueue.at(i).second;
-        quint32 currTime = func->tempoType() == Function::Time ? m_elapsedTime : m_elapsedBeats;
+        RunningFunction running = m_runningQueue.at(i);
+        quint32 currTime = running.function->tempoType() == Function::Time
+                           ? m_elapsedTime : m_elapsedBeats;
 
         // if we passed the function stop time
-        if (currTime >= stopTime)
+        if (currTime >= running.stopTime)
         {
             // stop the function
-            func->stop(functionParent());
+            running.function->stop(functionParent());
             // remove it from the running queue
             m_runningQueue.removeAt(i);
         }
@@ -344,11 +356,16 @@ void ShowRunner::write(MasterTimer *timer)
     // every tick (unlike reporting m_elapsedBeats directly, which only
     // moves in whole-beat jumps), while staying exactly beat-aligned at
     // the sync instant itself.
-    if (m_show->timeDivisionType() == Show::Time)
+    if (m_show->timeDivisionType() == Show::Time ||
+        m_beatFunctions.isEmpty() || beatSynced == false)
     {
+        /* A BPM-based Show can still contain only time-based Functions
+         * (for example an imported song). In that case there is no beat
+         * queue to synchronise with, so there is no reason to withhold the
+         * playhead update until the first beat. */
         emit timeChanged(m_elapsedTime);
     }
-    else if (beatSynced)
+    else
     {
         emit timeChanged(m_syncBeatsTime + (m_elapsedTime - m_syncElapsedTime));
     }
@@ -368,15 +385,14 @@ void ShowRunner::adjustIntensity(qreal fraction, const Track *track)
 
     foreach (ShowFunction *sf, track->showFunctions())
     {
-        Function *f = m_doc->function(sf->functionID());
-        if (f == NULL)
-            continue;
-
         for (int i = 0; i < m_runningQueue.count(); i++)
         {
-            Function *rf = m_runningQueue.at(i).first;
-            if (f == rf)
-                f->adjustAttribute(fraction, sf->intensityOverrideId());
+            const RunningFunction &running = m_runningQueue.at(i);
+            if (running.showFunction == sf)
+            {
+                running.function->adjustAttribute(fraction,
+                                                  sf->intensityOverrideId());
+            }
         }
     }
 }

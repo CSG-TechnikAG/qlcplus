@@ -96,10 +96,21 @@ private:
      *  runner has to run, computed from m_beatFunctions */
     quint32 m_totalRunBeats;
 
+    /** A Function actually running in this Show. Per-clip overrides may
+     *  require a private runtime copy of the source Function. */
+    struct RunningFunction
+    {
+        Function *function;
+        ShowFunction *showFunction;
+        quint32 stopTime;
+    };
+
     /** List of the currently running Functions and their stop time */
-    QList < QPair<Function *, quint32> > m_runningQueue;
+    QList<RunningFunction> m_runningQueue;
 
 private:
+    Function *runtimeFunctionFor(ShowFunction *sf, Function *source);
+    void startShowFunction(ShowFunction *sf, Function *source, quint32 timeOffset);
     FunctionParent functionParent() const;
 
 signals:

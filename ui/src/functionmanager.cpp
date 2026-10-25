@@ -25,6 +25,10 @@
 #include <QHeaderView>
 #include <QMessageBox>
 #include <QVBoxLayout>
+#include <QHBoxLayout>
+#include <QFrame>
+#include <QToolButton>
+#include <QApplication>
 #include <QFileDialog>
 #include <QCheckBox>
 #include <QSplitter>
@@ -34,6 +38,8 @@
 #include <QPixmap>
 #include <QDebug>
 #include <QMenu>
+#include <QDataStream>
+#include <QPointer>
 #include <QList>
 #include <QIcon>
 
@@ -42,6 +48,11 @@
 #include "collectioneditor.h"
 #include "audioplugincache.h"
 #include "functionmanager.h"
+#include "audioanalyzer.h"
+#include "audio.h"
+#include "appicons.h"
+#include "appemptystate.h"
+#include "theme.h"
 #include "rgbmatrixeditor.h"
 #include "functionwizard.h"
 #include "chasereditor.h"
@@ -83,6 +94,7 @@ FunctionManager::FunctionManager(QWidget* parent, Doc* doc)
     , m_hsplitter(NULL)
     , m_vsplitter(NULL)
     , m_tree(NULL)
+    , m_noEditorState(NULL)
     , m_toolbar(NULL)
     , m_addSceneAction(NULL)
     , m_addChaserAction(NULL)
@@ -108,8 +120,8 @@ FunctionManager::FunctionManager(QWidget* parent, Doc* doc)
     Q_ASSERT(doc != NULL);
 
     new QVBoxLayout(this);
-    layout()->setContentsMargins(0, 0, 0, 0);
-    layout()->setSpacing(0);
+    layout()->setContentsMargins(12, 8, 12, 10);
+    layout()->setSpacing(10);
 
     initActions();
     initToolbar();
@@ -149,12 +161,14 @@ FunctionManager* FunctionManager::instance()
 void FunctionManager::slotModeChanged()
 {
     updateActionStatus();
+    updateEditorPlaceholder();
 }
 
 void FunctionManager::slotDocClearing()
 {
     deleteCurrentEditor(false); // Synchronous delete
     m_tree->clearTree();
+    updateEditorPlaceholder();
 }
 
 void FunctionManager::slotDocLoading()
@@ -167,6 +181,7 @@ void FunctionManager::slotDocLoaded()
     connect(m_doc, SIGNAL(functionAdded(quint32)), this, SLOT(slotFunctionAdded(quint32)));
 
     m_tree->updateTree();
+    updateEditorPlaceholder();
 }
 
 void FunctionManager::slotFunctionNameChanged(quint32 id)
@@ -177,6 +192,7 @@ void FunctionManager::slotFunctionNameChanged(quint32 id)
 void FunctionManager::slotFunctionAdded(quint32 id)
 {
     m_tree->addFunction(id);
+    updateEditorPlaceholder();
 }
 
 void FunctionManager::showEvent(QShowEvent* ev)
@@ -200,96 +216,96 @@ void FunctionManager::hideEvent(QHideEvent* ev)
 void FunctionManager::initActions()
 {
     /* Manage actions */
-    m_addSceneAction = new QAction(QIcon(":/scene.png"),
+    m_addSceneAction = new QAction(AppIcons::icon("scene", 24),
                                    tr("New &scene"), this);
     m_addSceneAction->setShortcut(QKeySequence("CTRL+1"));
     connect(m_addSceneAction, SIGNAL(triggered(bool)),
             this, SLOT(slotAddScene()));
 
-    m_addChaserAction = new QAction(QIcon(":/chaser.png"),
+    m_addChaserAction = new QAction(AppIcons::icon("chaser", 24),
                                     tr("New c&haser"), this);
     m_addChaserAction->setShortcut(QKeySequence("CTRL+2"));
     connect(m_addChaserAction, SIGNAL(triggered(bool)),
             this, SLOT(slotAddChaser()));
 
-    m_addSequenceAction = new QAction(QIcon(":/sequence.png"),
+    m_addSequenceAction = new QAction(AppIcons::icon("sequence", 24),
                                     tr("New se&quence"), this);
     m_addSequenceAction->setShortcut(QKeySequence("CTRL+3"));
     connect(m_addSequenceAction, SIGNAL(triggered(bool)),
             this, SLOT(slotAddSequence()));
 
-    m_addEFXAction = new QAction(QIcon(":/efx.png"),
+    m_addEFXAction = new QAction(AppIcons::icon("efx", 24),
                                  tr("New E&FX"), this);
     m_addEFXAction->setShortcut(QKeySequence("CTRL+4"));
     connect(m_addEFXAction, SIGNAL(triggered(bool)),
             this, SLOT(slotAddEFX()));
 
-    m_addCollectionAction = new QAction(QIcon(":/collection.png"),
+    m_addCollectionAction = new QAction(AppIcons::icon("collection", 24),
                                         tr("New c&ollection"), this);
     m_addCollectionAction->setShortcut(QKeySequence("CTRL+5"));
     connect(m_addCollectionAction, SIGNAL(triggered(bool)),
             this, SLOT(slotAddCollection()));
 
-    m_addRGBMatrixAction = new QAction(QIcon(":/rgbmatrix.png"),
+    m_addRGBMatrixAction = new QAction(AppIcons::icon("rgbmatrix", 24),
                                  tr("New &RGB Matrix"), this);
     m_addRGBMatrixAction->setShortcut(QKeySequence("CTRL+6"));
     connect(m_addRGBMatrixAction, SIGNAL(triggered(bool)),
             this, SLOT(slotAddRGBMatrix()));
 
-    m_addScriptAction = new QAction(QIcon(":/script.png"),
+    m_addScriptAction = new QAction(AppIcons::icon("script", 24),
                                  tr("New scrip&t"), this);
     m_addScriptAction->setShortcut(QKeySequence("CTRL+7"));
     connect(m_addScriptAction, SIGNAL(triggered(bool)),
             this, SLOT(slotAddScript()));
 
-    m_addAudioAction = new QAction(QIcon(":/audio.png"),
+    m_addAudioAction = new QAction(AppIcons::icon("audio", 24),
                                    tr("New au&dio"), this);
     m_addAudioAction->setShortcut(QKeySequence("CTRL+8"));
     connect(m_addAudioAction, SIGNAL(triggered(bool)),
             this, SLOT(slotAddAudio()));
 
-    m_addVideoAction = new QAction(QIcon(":/video.png"),
+    m_addVideoAction = new QAction(AppIcons::icon("video", 24),
                                    tr("New vid&eo"), this);
     m_addVideoAction->setShortcut(QKeySequence("CTRL+9"));
     connect(m_addVideoAction, SIGNAL(triggered(bool)),
             this, SLOT(slotAddVideo()));
 
-    m_addPathAction = new QAction(QIcon(":/path.png"),
+    m_addPathAction = new QAction(AppIcons::icon("path", 24),
                                   tr("New &Path"), this);
     connect(m_addPathAction, SIGNAL(triggered(bool)),
             this, SLOT(slotAddPath()));
 
-    m_addFolderAction = new QAction(QIcon(":/folder.png"),
+    m_addFolderAction = new QAction(AppIcons::icon("folder", 24),
                                    tr("New fo&lder"), this);
     m_addFolderAction->setShortcut(QKeySequence("CTRL+L"));
     connect(m_addFolderAction, SIGNAL(triggered(bool)),
             this, SLOT(slotAddFolder()));
 
-    m_autostartAction = new QAction(QIcon(":/autostart.png"),
+    m_autostartAction = new QAction(AppIcons::icon("zap", 24),
                                     tr("Select Startup Function"), this);
     connect(m_autostartAction, SIGNAL(triggered(bool)),
             this, SLOT(slotSelectAutostartFunction()));
 
-    m_wizardAction = new QAction(QIcon(":/wizard.png"),
+    m_wizardAction = new QAction(AppIcons::icon("wand-sparkles", 24),
                                  tr("Function &Wizard"), this);
     m_wizardAction->setShortcut(QKeySequence("CTRL+W"));
     connect(m_wizardAction, SIGNAL(triggered(bool)),
             this, SLOT(slotWizard()));
 
     /* Edit actions */
-    m_cloneAction = new QAction(QIcon(":/editcopy.png"),
+    m_cloneAction = new QAction(AppIcons::icon("copy", 24),
                                 tr("&Clone"), this);
     m_cloneAction->setShortcut(QKeySequence("CTRL+C"));
     connect(m_cloneAction, SIGNAL(triggered(bool)),
             this, SLOT(slotClone()));
 
-    m_deleteAction = new QAction(QIcon(":/editdelete.png"),
+    m_deleteAction = new QAction(AppIcons::icon("trash-2", 24),
                                  tr("&Delete"), this);
     m_deleteAction->setShortcut(QKeySequence("Delete"));
     connect(m_deleteAction, SIGNAL(triggered(bool)),
             this, SLOT(slotDelete()));
 
-    m_selectAllAction = new QAction(QIcon(":/selectall.png"),
+    m_selectAllAction = new QAction(AppIcons::icon("check", 24),
                                     tr("Select &all"), this);
     m_selectAllAction->setShortcut(QKeySequence("CTRL+A"));
     connect(m_selectAllAction, SIGNAL(triggered(bool)),
@@ -298,11 +314,20 @@ void FunctionManager::initActions()
 
 void FunctionManager::initToolbar()
 {
-    // Add a toolbar to the dock area
-    m_toolbar = new QToolBar("Function Manager", this);
+    QFrame *actionBar = new QFrame(this);
+    actionBar->setObjectName("pageActionBar");
+    actionBar->setFixedHeight(48);
+    QHBoxLayout *barLayout = new QHBoxLayout(actionBar);
+    barLayout->setContentsMargins(6, 4, 6, 4);
+    barLayout->setSpacing(6);
+
+    m_toolbar = new QToolBar(tr("Function Manager"), actionBar);
+    m_toolbar->setObjectName("pageToolBar");
     m_toolbar->setFloatable(false);
     m_toolbar->setMovable(false);
-    layout()->addWidget(m_toolbar);
+    m_toolbar->setIconSize(QSize(24, 24));
+    m_toolbar->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
+    m_toolbar->setMinimumWidth(0);
     m_toolbar->addAction(m_addSceneAction);
     m_toolbar->addAction(m_addChaserAction);
     m_toolbar->addAction(m_addSequenceAction);
@@ -313,15 +338,39 @@ void FunctionManager::initToolbar()
     m_toolbar->addAction(m_addAudioAction);
     m_toolbar->addAction(m_addVideoAction);
     m_toolbar->addAction(m_addPathAction);
-    m_toolbar->addSeparator();
     m_toolbar->addAction(m_addFolderAction);
     m_toolbar->addSeparator();
     m_toolbar->addAction(m_autostartAction);
     m_toolbar->addAction(m_wizardAction);
     m_toolbar->addSeparator();
     m_toolbar->addAction(m_cloneAction);
-    m_toolbar->addSeparator();
     m_toolbar->addAction(m_deleteAction);
+
+    barLayout->addWidget(m_toolbar, 1);
+
+    /* Qt draws the toolbar overflow arrow with the base style; on dark themes
+     * it can be effectively invisible. Use our themed chevron instead. */
+    QToolButton *extButton = m_toolbar->findChild<QToolButton *>("qt_toolbar_ext_button");
+    if (extButton != NULL)
+    {
+        extButton->setArrowType(Qt::NoArrow);
+        extButton->setIcon(AppIcons::icon("chevron-down", 12));
+        extButton->setIconSize(QSize(12, 12));
+    }
+    static_cast<QVBoxLayout *>(layout())->addWidget(actionBar);
+
+    /* Keep the creation shortcuts registered. */
+    addAction(m_addSceneAction);
+    addAction(m_addChaserAction);
+    addAction(m_addSequenceAction);
+    addAction(m_addEFXAction);
+    addAction(m_addCollectionAction);
+    addAction(m_addRGBMatrixAction);
+    addAction(m_addScriptAction);
+    addAction(m_addAudioAction);
+    addAction(m_addVideoAction);
+    addAction(m_addPathAction);
+    addAction(m_addFolderAction);
 }
 
 void FunctionManager::slotAddScene()
@@ -702,29 +751,41 @@ void FunctionManager::initSplitterView()
 {
     m_vsplitter = new QSplitter(Qt::Vertical, this);
     layout()->addWidget(m_vsplitter);
-    // add container for tree view + right editor
+
     QWidget* gcontainer = new QWidget(this);
     m_vsplitter->addWidget(gcontainer);
     gcontainer->setLayout(new QVBoxLayout);
     gcontainer->layout()->setContentsMargins(0, 0, 0, 0);
+    gcontainer->layout()->setSpacing(0);
 
-    // add container for scene editor
-    QWidget* scontainer = new QWidget(this);
+    QFrame* scontainer = new QFrame(this);
+    scontainer->setObjectName("pagePanel");
     m_vsplitter->addWidget(scontainer);
     scontainer->setLayout(new QVBoxLayout);
-    scontainer->layout()->setContentsMargins(0, 0, 0, 0);
+    scontainer->layout()->setContentsMargins(12, 12, 12, 12);
+    scontainer->layout()->setSpacing(6);
     scontainer->hide();
 
-    m_hsplitter = new QSplitter(Qt::Horizontal, this);
-    //layout()->addWidget(m_hsplitter);
+    m_hsplitter = new QSplitter(Qt::Horizontal, gcontainer);
     m_vsplitter->widget(0)->layout()->addWidget(m_hsplitter);
     initTree();
 
-    QWidget* container = new QWidget(this);
-    m_hsplitter->addWidget(container);
+    QFrame* container = new QFrame(this);
+    container->setObjectName("pagePanel");
     container->setLayout(new QVBoxLayout);
-    container->layout()->setContentsMargins(0, 0, 0, 0);
-    container->hide();
+    container->layout()->setContentsMargins(12, 12, 12, 12);
+    container->layout()->setSpacing(6);
+    m_hsplitter->addWidget(container);
+
+    m_noEditorState = new AppEmptyState(container);
+    m_noEditorState->setIcon("functions");
+    m_noEditorState->setTitle(tr("No function selected"));
+    m_noEditorState->setDescription(tr("Select a function from the list to edit it, or create a new one."));
+    m_noEditorState->setActionText(tr("New scene"));
+    connect(m_noEditorState, &AppEmptyState::actionTriggered,
+            this, &FunctionManager::slotAddScene);
+    container->layout()->addWidget(m_noEditorState);
+    updateEditorPlaceholder();
 }
 
 void FunctionManager::initTree()
@@ -827,12 +888,30 @@ void FunctionManager::slotTreeSelectionChanged()
     else
     {
         editFunction(NULL);
+        updateEditorPlaceholder();
     }
 }
 
 void FunctionManager::slotTreeContextMenuRequested()
 {
     QMenu menu(this);
+
+    Audio *selectedAudio = NULL;
+    if (m_tree->selectedItems().size() == 1)
+    {
+        Function *function = m_doc->function(m_tree->itemFunctionId(m_tree->selectedItems().first()));
+        if (function != NULL && function->type() == Function::AudioType)
+            selectedAudio = qobject_cast<Audio *>(function);
+    }
+
+    QAction *analyzeAction = NULL;
+    if (selectedAudio != NULL)
+    {
+        analyzeAction = menu.addAction(AppIcons::icon("audio", 24),
+                                       tr("Analyze audio BPM and waveform"));
+        menu.addSeparator();
+    }
+
     menu.addAction(m_cloneAction);
     menu.addAction(m_selectAllAction);
     menu.addSeparator();
@@ -854,7 +933,60 @@ void FunctionManager::slotTreeContextMenuRequested()
 
     updateActionStatus();
 
-    menu.exec(QCursor::pos());
+    QAction *chosen = menu.exec(QCursor::pos());
+    if (chosen == analyzeAction && selectedAudio != NULL)
+        analyzeAudio(selectedAudio);
+}
+
+void FunctionManager::analyzeAudio(Audio *audio)
+{
+    if (audio == NULL)
+        return;
+
+    AudioAnalyzer *analyzer = AudioAnalyzer::create(m_doc, audio);
+    if (analyzer == NULL)
+    {
+        QMessageBox::warning(this, tr("Analyze Audio"),
+                             tr("The audio source file cannot be decoded."));
+        return;
+    }
+
+    QPointer<Audio> guard(audio);
+    connect(analyzer, &AudioAnalyzer::analysisReady, this,
+            [this, guard](quint32 id, double bpm, QByteArray waveform,
+                          QByteArray beats, QByteArray triggers)
+    {
+        Q_UNUSED(id)
+        if (guard.isNull())
+            return;
+        QVector<quint32> beatPositions;
+        QDataStream bStream(&beats, QIODevice::ReadOnly);
+        while (bStream.atEnd() == false)
+        {
+            quint32 value;
+            bStream >> value;
+            beatPositions.append(value);
+        }
+        QVector<quint32> triggerPositions;
+        QDataStream tStream(&triggers, QIODevice::ReadOnly);
+        while (tStream.atEnd() == false)
+        {
+            quint32 value;
+            tStream >> value;
+            triggerPositions.append(value);
+        }
+        guard->setAnalysis(bpm, waveform, beatPositions, triggerPositions);
+        m_doc->setModified();
+    });
+
+    connect(analyzer, &AudioAnalyzer::analysisFailed, this,
+            [this](quint32 id, const QString &reason)
+    {
+        Q_UNUSED(id)
+        QMessageBox::warning(this, tr("Analyze Audio"), reason);
+    });
+    connect(analyzer, &QThread::finished, analyzer, &QObject::deleteLater);
+    analyzer->start();
 }
 
 /*****************************************************************************
@@ -890,6 +1022,21 @@ void FunctionManager::copyFunction(quint32 fid)
         QTreeWidgetItem* item = m_tree->functionItem(copy);
         m_tree->setCurrentItem(item);
     }
+}
+
+void FunctionManager::updateEditorPlaceholder()
+{
+    if (m_noEditorState == NULL)
+        return;
+
+    const bool hasFunctions = m_doc->functions().count() > 0;
+    m_noEditorState->setTitle(hasFunctions ? tr("No function selected")
+                                            : tr("No functions yet"));
+    m_noEditorState->setDescription(hasFunctions
+        ? tr("Select a function from the list to edit it.")
+        : tr("Create a scene, chaser or another function to get started."));
+    m_noEditorState->setActionText(tr("New scene"));
+    m_noEditorState->setActionEnabled(m_doc->mode() == Doc::Design);
 }
 
 void FunctionManager::editFunction(Function* function)
@@ -986,17 +1133,35 @@ void FunctionManager::editFunction(Function* function)
     }
 
     // Show the editor
+    if (m_editor != NULL || m_scene_editor != NULL)
+    {
+        if (m_noEditorState != NULL)
+            m_noEditorState->hide();
+    }
     if (m_editor != NULL)
     {
         m_hsplitter->widget(1)->show();
         m_hsplitter->widget(1)->layout()->addWidget(m_editor);
         m_editor->show();
     }
+    else
+    {
+        m_hsplitter->widget(1)->hide();
+    }
     if (m_scene_editor != NULL)
     {
         m_vsplitter->widget(1)->show();
         m_vsplitter->widget(1)->layout()->addWidget(m_scene_editor);
         m_scene_editor->show();
+    }
+    else
+    {
+        m_vsplitter->widget(1)->hide();
+    }
+    if (m_editor == NULL && m_scene_editor == NULL)
+    {
+        m_hsplitter->widget(1)->show();
+        updateEditorPlaceholder();
     }
 }
 
@@ -1016,6 +1181,11 @@ void FunctionManager::deleteCurrentEditor(bool async)
     m_editor = NULL;
     m_scene_editor = NULL;
 
-    m_hsplitter->widget(1)->hide();
+    m_hsplitter->widget(1)->show();
     m_vsplitter->widget(1)->hide();
+    if (m_noEditorState != NULL)
+    {
+        m_noEditorState->show();
+        updateEditorPlaceholder();
+    }
 }

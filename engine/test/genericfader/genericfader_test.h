@@ -36,6 +36,7 @@ private slots:
     void writeZeroFade();
     void writeLoop();
     void adjustIntensity();
+    void removalClearsChannels();
 
 private:
     Doc* m_doc;

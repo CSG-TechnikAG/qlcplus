@@ -20,6 +20,7 @@
 #include <QInputDialog>
 #include <QColorDialog>
 #include <QMessageBox>
+#include <QToolButton>
 #include <QFileDialog>
 #include <QVBoxLayout>
 #include <QMouseEvent>
@@ -28,7 +29,7 @@
 #include <QSplitter>
 #include <QSettings>
 #include <QToolBar>
-#include <QSpinBox>
+#include <QDoubleSpinBox>
 #include <QLabel>
 #include <QDebug>
 #include <QUrl>
@@ -42,6 +43,12 @@
 #include "efxeditor.h"
 #include "videoeditor.h"
 #include "showmanager.h"
+#include "audio.h"
+#include "audioanalyzer.h"
+#include <QDataStream>
+#include <QPointer>
+#include "theme.h"
+#include "appicons.h"
 #include "sceneeditor.h"
 #include "timingstool.h"
 #include "qlcmacros.h"
@@ -90,13 +97,14 @@ ShowManager::ShowManager(QWidget* parent, Doc* doc)
     Q_ASSERT(doc != NULL);
 
     new QVBoxLayout(this);
-    layout()->setContentsMargins(0, 0, 0, 0);
-    layout()->setSpacing(0);
+    layout()->setContentsMargins(12, 8, 12, 10);
+    layout()->setSpacing(10);
 
     initActions();
     initToolbar();
 
     m_splitter = new QSplitter(Qt::Vertical, this);
+    m_splitter->setObjectName("pagePanel");
     layout()->addWidget(m_splitter);
     //initMultiTrackView();
     m_showview = new MultiTrackView();
@@ -109,12 +117,26 @@ ShowManager::ShowManager(QWidget* parent, Doc* doc)
     m_showview->setRenderHint(QPainter::Antialiasing);
     m_showview->setAcceptDrops(true);
     m_showview->setAlignment(Qt::AlignLeft | Qt::AlignTop);
-    m_showview->setBackgroundBrush(QBrush(QColor(88, 88, 88, 255), Qt::SolidPattern));
+    m_showview->setBackgroundBrush(QBrush(Theme::instance()->color(Theme::Surface)));
+    connect(Theme::instance(), &Theme::changed, this, [this]()
+    {
+        if (m_showview == NULL)
+            return;
+        m_showview->setBackgroundBrush(QBrush(Theme::instance()->color(Theme::Surface)));
+        m_showview->updateTracksDividers();
+        m_showview->viewport()->update();
+    });
     connect(m_showview, SIGNAL(viewClicked(QMouseEvent *)),
             this, SLOT(slotViewClicked(QMouseEvent *)));
 
     connect(m_showview, SIGNAL(showItemMoved(ShowItem*,quint32,bool)),
             this, SLOT(slotShowItemMoved(ShowItem*,quint32,bool)));
+    connect(m_showview, SIGNAL(showItemResized(ShowItem*)),
+            this, SLOT(slotShowItemResized(ShowItem*)));
+    connect(m_showview, SIGNAL(showItemTimingsRequested(ShowItem*)),
+            this, SLOT(slotShowItemTimings(ShowItem*)));
+    connect(m_showview, SIGNAL(showItemDuplicateRequested(ShowItem*)),
+            this, SLOT(slotShowItemDuplicate(ShowItem*)));
     connect(m_showview, SIGNAL(timeChanged(quint32)),
             this, SLOT(slotUpdateTime(quint32)));
     connect(m_showview, SIGNAL(trackClicked(Track*)),
@@ -195,93 +217,101 @@ void ShowManager::clearContents()
 void ShowManager::initActions()
 {
     /* Manage actions */
-    m_addShowAction = new QAction(QIcon(":/show.png"),
+    m_addShowAction = new QAction(AppIcons::icon("shows", 24),
                                    tr("New s&how"), this);
     m_addShowAction->setShortcut(QKeySequence("CTRL+H"));
     connect(m_addShowAction, SIGNAL(triggered(bool)),
             this, SLOT(slotAddShow()));
 
-    m_addTrackAction = new QAction(QIcon(":/edit_add.png"),
+    m_addTrackAction = new QAction(AppIcons::icon("layers", 24),
                                    tr("Add a &track or an existing function"), this);
-    m_addTrackAction->setShortcut(QKeySequence("CTRL+N"));
+    m_addTrackAction->setShortcut(QKeySequence("CTRL+SHIFT+N"));
     connect(m_addTrackAction, SIGNAL(triggered(bool)),
             this, SLOT(slotAddItem()));
 
-    m_addSequenceAction = new QAction(QIcon(":/sequence.png"),
+    m_addSequenceAction = new QAction(AppIcons::icon("sequence", 24),
                                     tr("New s&equence"), this);
     m_addSequenceAction->setShortcut(QKeySequence("CTRL+E"));
     connect(m_addSequenceAction, SIGNAL(triggered(bool)),
             this, SLOT(slotAddSequence()));
 
-    m_addAudioAction = new QAction(QIcon(":/audio.png"),
+    m_addAudioAction = new QAction(AppIcons::icon("audio", 24),
                                     tr("New &audio"), this);
     m_addAudioAction->setShortcut(QKeySequence("CTRL+A"));
     connect(m_addAudioAction, SIGNAL(triggered(bool)),
             this, SLOT(slotAddAudio()));
 
-    m_addVideoAction = new QAction(QIcon(":/video.png"),
+    m_addVideoAction = new QAction(AppIcons::icon("video", 24),
                                     tr("New vi&deo"), this);
     m_addVideoAction->setShortcut(QKeySequence("CTRL+D"));
     connect(m_addVideoAction, SIGNAL(triggered(bool)),
             this, SLOT(slotAddVideo()));
 
     /* Edit actions */
-    m_copyAction = new QAction(QIcon(":/editcopy.png"),
+    m_copyAction = new QAction(AppIcons::icon("copy", 24),
                                 tr("&Copy"), this);
     m_copyAction->setShortcut(QKeySequence("CTRL+C"));
     connect(m_copyAction, SIGNAL(triggered(bool)),
             this, SLOT(slotCopy()));
     m_copyAction->setEnabled(false);
 
-    m_pasteAction = new QAction(QIcon(":/editpaste.png"),
+    m_duplicateAction = new QAction(AppIcons::icon("copy-check", 24),
+                                    tr("Duplicate clip"), this);
+    m_duplicateAction->setShortcut(QKeySequence("CTRL+SHIFT+D"));
+    m_duplicateAction->setToolTip(tr("Duplicate the selected clip with its timing"));
+    connect(m_duplicateAction, SIGNAL(triggered(bool)),
+            this, SLOT(slotDuplicateItem()));
+    m_duplicateAction->setEnabled(false);
+
+    m_pasteAction = new QAction(AppIcons::icon("clipboard", 24),
                                tr("&Paste"), this);
     m_pasteAction->setShortcut(QKeySequence("CTRL+V"));
     connect(m_pasteAction, SIGNAL(triggered(bool)),
             this, SLOT(slotPaste()));
     m_pasteAction->setEnabled(false);
 
-    m_deleteAction = new QAction(QIcon(":/editdelete.png"),
+    m_deleteAction = new QAction(AppIcons::icon("trash-2", 24),
                                  tr("&Delete"), this);
     m_deleteAction->setShortcut(QKeySequence("Delete"));
     connect(m_deleteAction, SIGNAL(triggered(bool)),
             this, SLOT(slotDelete()));
     m_deleteAction->setEnabled(false);
 
-    m_colorAction = new QAction(QIcon(":/color.png"),
+    m_colorAction = new QAction(AppIcons::icon("appearance", 24),
                                 tr("Change Co&lor"), this);
     m_colorAction->setShortcut(QKeySequence("CTRL+L"));
     connect(m_colorAction, SIGNAL(triggered(bool)),
            this, SLOT(slotChangeColor()));
     m_colorAction->setEnabled(false);
 
-    m_lockAction = new QAction(QIcon(":/lock.png"),
+    m_lockAction = new QAction(AppIcons::icon("lock", 24),
                                tr("Lock item"), this);
     m_lockAction->setShortcut(QKeySequence("CTRL+K"));
     connect(m_lockAction, SIGNAL(triggered()),
             this, SLOT(slotChangeLock()));
     m_lockAction->setEnabled(false);
 
-    m_timingsAction = new QAction(QIcon(":/speed.png"),
+    m_timingsAction = new QAction(AppIcons::icon("clock", 24),
                                   tr("Item start time and duration"), this);
     m_timingsAction->setShortcut(QKeySequence("CTRL+T"));
     connect(m_timingsAction, SIGNAL(triggered()),
             this, SLOT(slotShowTimingsTool()));
     m_timingsAction->setEnabled(false);
 
-    m_snapGridAction = new QAction(QIcon(":/grid.png"),
+    m_snapGridAction = new QAction(AppIcons::icon("grid-3x3", 24),
                                    tr("Snap to &Grid"), this);
     m_snapGridAction->setShortcut(QKeySequence("CTRL+G"));
     m_snapGridAction->setCheckable(true);
     connect(m_snapGridAction, SIGNAL(triggered(bool)),
            this, SLOT(slotToggleSnapToGrid(bool)));
 
-    m_stopAction = new QAction(QIcon(":/player_stop.png"),
+    m_stopAction = new QAction(AppIcons::icon("square", 24),
                                  tr("St&op"), this);
     m_stopAction->setShortcut(QKeySequence("CTRL+SPACE"));
     connect(m_stopAction, SIGNAL(triggered(bool)),
             this, SLOT(slotStopPlayback()));
 
-    m_playAction = new QAction(QIcon(":/player_play.png"),
+    m_playAction = new QAction(AppIcons::icon("play", 24),
                                  tr("&Play"), this);
     m_playAction->setShortcut(QKeySequence("SPACE"));
     connect(m_playAction, SIGNAL(triggered(bool)),
@@ -291,10 +321,20 @@ void ShowManager::initActions()
 void ShowManager::initToolbar()
 {
     // Add a toolbar to the dock area
-    m_toolbar = new QToolBar("Show Manager", this);
+    QFrame *actionBar = new QFrame(this);
+    actionBar->setObjectName("pageActionBar");
+    actionBar->setFixedHeight(48);
+    QHBoxLayout *barLayout = new QHBoxLayout(actionBar);
+    barLayout->setContentsMargins(6, 4, 6, 4);
+    barLayout->setSpacing(6);
+
+    m_toolbar = new QToolBar("Show Manager", actionBar);
+    m_toolbar->setObjectName("pageToolBar");
     m_toolbar->setFloatable(false);
     m_toolbar->setMovable(false);
-    layout()->addWidget(m_toolbar);
+    m_toolbar->setIconSize(QSize(24, 24));
+    barLayout->addWidget(m_toolbar);
+    static_cast<QVBoxLayout *>(layout())->addWidget(actionBar);
     m_toolbar->addAction(m_addShowAction);
     m_showsCombo = new QComboBox();
     m_showsCombo->setFixedWidth(250);
@@ -311,6 +351,7 @@ void ShowManager::initToolbar()
 
     m_toolbar->addSeparator();
     m_toolbar->addAction(m_copyAction);
+    m_toolbar->addAction(m_duplicateAction);
     m_toolbar->addAction(m_pasteAction);
     m_toolbar->addAction(m_deleteAction);
     m_toolbar->addSeparator();
@@ -354,15 +395,30 @@ void ShowManager::initToolbar()
     connect(m_timeDivisionCombo, SIGNAL(currentIndexChanged(int)),
             this, SLOT(slotTimeDivisionTypeChanged(int)));
 
-    m_bpmField = new QSpinBox();
-    m_bpmField->setFixedWidth(70);
-    m_bpmField->setMinimum(10);
-    m_bpmField->setMaximum(240);
-    m_bpmField->setValue(120);
+    m_bpmField = new QDoubleSpinBox();
+    m_bpmField->setFixedWidth(82);
+    m_bpmField->setDecimals(2);
+    m_bpmField->setSingleStep(0.1);
+    m_bpmField->setMinimum(10.0);
+    m_bpmField->setMaximum(240.0);
+    m_bpmField->setValue(120.0);
     m_bpmField->setEnabled(false);
     m_toolbar->addWidget(m_bpmField);
-    connect(m_bpmField, SIGNAL(valueChanged(int)),
-            this, SLOT(slotBPMValueChanged(int)));
+
+    m_autoBpmAction = new QAction(AppIcons::icon("music", 24), tr("Auto BPM from audio"), this);
+    m_autoBpmAction->setToolTip(tr("Set the Show BPM from the first analyzed audio function"));
+    m_toolbar->addAction(m_autoBpmAction);
+    QToolButton *autoBpmButton = qobject_cast<QToolButton *>(
+                m_toolbar->widgetForAction(m_autoBpmAction));
+    if (autoBpmButton != NULL)
+    {
+        autoBpmButton->setText(tr("Auto BPM"));
+        autoBpmButton->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    }
+    connect(m_autoBpmAction, SIGNAL(triggered()), this, SLOT(slotAutoBpm()));
+
+    connect(m_bpmField, SIGNAL(valueChanged(double)),
+            this, SLOT(slotBPMValueChanged(double)));
 }
 
 /*********************************************************************
@@ -427,7 +483,15 @@ void ShowManager::updateShowsCombo()
 
     m_showsCombo->setCurrentIndex(m_selectedShowIndex);
 
-    if (oldIndex != m_selectedShowIndex)
+    /* The combo index can stay the same across workspace loads, but the
+     * previously selected Show object is not valid anymore. Resolve the
+     * current selection also when m_show is null or points to another Show,
+     * otherwise Add Track silently does nothing after loading a workspace. */
+    bool showChanged = (m_show == NULL);
+    if (showChanged == false)
+        showChanged = (m_show->id() != m_showsCombo->itemData(m_selectedShowIndex).toUInt());
+
+    if (oldIndex != m_selectedShowIndex || showChanged == true)
         updateMultiTrackView();
 }
 
@@ -581,6 +645,7 @@ void ShowManager::slotAddShow()
             m_selectedShowIndex = insertPosition;
             updateShowsCombo();
             m_copyAction->setEnabled(false);
+            m_duplicateAction->setEnabled(false);
             if (m_doc->clipboard()->hasFunction())
                 m_pasteAction->setEnabled(true);
             showSceneEditor(NULL);
@@ -593,6 +658,9 @@ void ShowManager::slotAddShow()
 
 void ShowManager::slotAddItem()
 {
+    /* Recover from a stale selection (e.g. right after a workspace load). */
+    if (m_show == NULL)
+        updateMultiTrackView();
     if (m_show == NULL)
         return;
 
@@ -702,8 +770,11 @@ void ShowManager::slotAddItem()
                 /** 5.1) add audio to the currently selected track */
                 if (m_currentTrack != NULL)
                 {
-                    m_showview->addAudio(qobject_cast<Audio*>(selectedFunc), m_currentTrack);
+                    Audio *audio = qobject_cast<Audio*>(selectedFunc);
+                    m_showview->addAudio(audio, m_currentTrack);
                     m_doc->setModified();
+                    if (audio != NULL && audio->bpm() > 0)
+                        slotAutoBpm();
                     return;
                 }
                 /** 5.2) It is necessary to create a new track (below) */
@@ -810,6 +881,8 @@ void ShowManager::slotAddItem()
                 /** 5.2) add audio to the new track */
                 Audio *audio = qobject_cast<Audio*> (selectedFunc);
                 m_showview->addAudio(audio, m_currentTrack);
+                if (audio != NULL && audio->bpm() > 0)
+                    slotAutoBpm();
             }
             else if (selectedFunc->type() == Function::RGBMatrixType)
             {
@@ -930,6 +1003,8 @@ void ShowManager::slotAddAudio()
     if (m_doc->addFunction(f) == true)
     {
         m_showview->addAudio(audio, m_currentTrack);
+        if (audio->bpm() > 0)
+            slotAutoBpm();
     }
 }
 
@@ -1099,6 +1174,8 @@ void ShowManager::slotPaste()
             }
             Audio *audio = qobject_cast<Audio*>(newCopy);
             m_showview->addAudio(audio, m_currentTrack);
+            if (audio != NULL && audio->bpm() > 0)
+                slotAutoBpm();
         }
         else if (clipboardCopy->type() == Function::RGBMatrixType)
         {
@@ -1155,6 +1232,14 @@ void ShowManager::slotPaste()
 
 void ShowManager::slotDelete()
 {
+    /* Never remove a clip or track while the ShowRunner may still be using
+     * it. This also protects the per-clip runtime Function objects. */
+    if (m_show != NULL && m_show->isRunning() == true)
+    {
+        m_show->stop(functionParent());
+        m_show->stopAndWait();
+    }
+
     // find out if we're deleting a show item or a track
     bool isTrack = true;
     ShowItem *selectedItem = m_showview->getSelectedItem();
@@ -1182,11 +1267,14 @@ void ShowManager::slotDelete()
             updateMultiTrackView();
         }
     }
+
+    m_copyAction->setEnabled(false);
+    m_duplicateAction->setEnabled(false);
 }
 
 void ShowManager::slotStopPlayback()
 {
-    m_playAction->setIcon(QIcon(":/player_play.png"));
+    m_playAction->setIcon(AppIcons::icon("play", 24));
     if (m_show != NULL && m_show->isRunning())
     {
         m_show->stop(functionParent());
@@ -1204,14 +1292,15 @@ void ShowManager::slotStartPlayback()
     if (m_show->isRunning() == false)
     {
         cursorMovedDuringPause = false;
+        m_show->prepareRuntimeFunctions(true);
         m_show->start(m_doc->masterTimer(), functionParent(), m_showview->getTimeFromCursor());
-        m_playAction->setIcon(QIcon(":/player_pause.png"));
+        m_playAction->setIcon(AppIcons::icon("pause", 24));
     }
     else
     {
         if (m_show->isPaused())
         {
-            m_playAction->setIcon(QIcon(":/player_pause.png"));
+            m_playAction->setIcon(AppIcons::icon("pause", 24));
             if (cursorMovedDuringPause)
             {
                 m_show->stop(functionParent());
@@ -1226,7 +1315,7 @@ void ShowManager::slotStartPlayback()
         }
         else
         {
-            m_playAction->setIcon(QIcon(":/player_play.png"));
+            m_playAction->setIcon(AppIcons::icon("play", 24));
             m_show->setPause(true);
         }
     }
@@ -1252,7 +1341,95 @@ void ShowManager::slotTimeDivisionTypeChanged(int idx)
     }
 }
 
-void ShowManager::slotBPMValueChanged(int value)
+void ShowManager::analyzeAudio(Audio *audio)
+{
+    if (audio == NULL || m_analysisStarted.contains(audio->id()))
+        return;
+    AudioAnalyzer *analyzer = AudioAnalyzer::create(m_doc, audio);
+    if (analyzer == NULL)
+        return;
+
+    m_analysisStarted.insert(audio->id());
+    QPointer<Audio> guard(audio);
+    connect(analyzer, &AudioAnalyzer::analysisReady, this,
+            [this, guard](quint32 id, double bpm, QByteArray waveform,
+                          QByteArray beats, QByteArray triggers)
+    {
+        Q_UNUSED(id)
+        if (guard.isNull())
+            return;
+        QVector<quint32> beatPositions;
+        QDataStream bStream(&beats, QIODevice::ReadOnly);
+        while (bStream.atEnd() == false)
+        {
+            quint32 value;
+            bStream >> value;
+            beatPositions.append(value);
+        }
+        QVector<quint32> triggerPositions;
+        QDataStream tStream(&triggers, QIODevice::ReadOnly);
+        while (tStream.atEnd() == false)
+        {
+            quint32 value;
+            tStream >> value;
+            triggerPositions.append(value);
+        }
+        guard->setAnalysis(bpm, waveform, beatPositions, triggerPositions);
+        m_doc->setModified();
+        if (m_show != NULL && m_show->contains(guard->id()) == true && bpm > 0)
+            slotAutoBpm();
+    });
+    connect(analyzer, &AudioAnalyzer::analysisFailed, this,
+            [this](quint32 id, const QString &reason)
+    {
+        Q_UNUSED(id)
+        m_analysisStarted.remove(id);
+        qWarning() << "[ShowManager] Audio analysis failed:" << reason;
+    });
+    connect(analyzer, &QThread::finished, analyzer, &QObject::deleteLater);
+    analyzer->start();
+}
+
+void ShowManager::slotAutoBpm()
+{
+    if (m_show == NULL)
+        return;
+
+    double bpm = 0.0;
+    for (quint32 functionId : m_show->components())
+    {
+        Function *function = m_doc->function(functionId);
+        if (function != NULL && function->type() == Function::AudioType)
+        {
+            Audio *audio = qobject_cast<Audio *>(function);
+            if (audio != NULL && audio->bpm() > 0)
+            {
+                bpm = audio->bpm();
+                break;
+            }
+        }
+    }
+
+    if (bpm <= 0)
+    {
+        QMessageBox::information(this, tr("Auto BPM"),
+                                 tr("No analyzed audio function with a detected BPM was found in this Show."));
+        return;
+    }
+
+    const int index = m_timeDivisionCombo->findData(QVariant(Show::BPM_4_4));
+    if (index < 0)
+        return;
+
+    m_show->setTimeDivision(Show::BPM_4_4, bpm);
+    m_timeDivisionCombo->setCurrentIndex(index);
+    m_bpmField->setValue(bpm);
+    m_showview->setHeaderType(Show::BPM_4_4);
+    m_showview->setBPMValue(bpm);
+    m_doc->setModified();
+}
+
+void ShowManager::slotBPMValueChanged(double value)
 {
     m_showview->setBPMValue(value);
     QVariant var = m_timeDivisionCombo->itemData(m_timeDivisionCombo->currentIndex());
@@ -1267,9 +1444,10 @@ void ShowManager::slotViewClicked(QMouseEvent *event)
     showSceneEditor(NULL);
     hideRightEditor();
     m_colorAction->setEnabled(false);
-    m_lockAction->setIcon(QIcon(":/lock.png"));
+    m_lockAction->setIcon(AppIcons::icon("lock", 24));
     m_lockAction->setEnabled(false);
     m_timingsAction->setEnabled(false);
+    m_duplicateAction->setEnabled(false);
     if (m_show != NULL && m_show->getTracksCount() == 0)
         m_deleteAction->setEnabled(false);
 }
@@ -1323,7 +1501,16 @@ void ShowManager::slotShowItemMoved(ShowItem *item, quint32 time, bool moved)
             if (m_currentEditor != NULL)
             {
                 ChaserEditor *editor = qobject_cast<ChaserEditor*>(m_currentEditor);
-                editor->selectStepAtTime(time - item->getStartTime());
+                quint32 localTime = time - item->getStartTime();
+                const quint32 sourceDuration = sequence->totalDuration();
+                const quint32 clipDuration = item->getDuration();
+                if (sourceDuration > 0 && clipDuration > 0 &&
+                    sourceDuration != clipDuration)
+                {
+                    localTime = quint32((qreal(localTime) * qreal(sourceDuration)) /
+                                        qreal(clipDuration));
+                }
+                editor->selectStepAtTime(localTime);
             }
         }
     }
@@ -1338,17 +1525,34 @@ void ShowManager::slotShowItemMoved(ShowItem *item, quint32 time, bool moved)
     }
 
     m_copyAction->setEnabled(true);
+    m_duplicateAction->setEnabled(true);
     m_deleteAction->setEnabled(true);
     m_colorAction->setEnabled(true);
     m_lockAction->setEnabled(true);
     if (item->isLocked() == false)
-        m_lockAction->setIcon(QIcon(":/lock.png"));
+        m_lockAction->setIcon(AppIcons::icon("lock", 24));
     else
-        m_lockAction->setIcon(QIcon(":/unlock.png"));
+        m_lockAction->setIcon(AppIcons::icon("unlock", 24));
     m_timingsAction->setEnabled(true);
 
     if (moved == true)
         m_doc->setModified();
+}
+
+void ShowManager::slotShowItemResized(ShowItem *item)
+{
+    if (item == NULL)
+        return;
+
+    m_duplicateAction->setEnabled(true);
+    if (item->showFunction() != NULL &&
+        (m_show == NULL || m_show->isRunning() == false))
+    {
+        item->showFunction()->prepareRuntimeFunction(m_doc);
+    }
+    m_doc->setModified();
+    m_showview->updateViewSize();
+    m_showview->viewport()->update();
 }
 
 void ShowManager::slotUpdateTimeAndCursor(quint32 msec_time)
@@ -1400,6 +1604,7 @@ void ShowManager::slotTrackClicked(Track *track)
     }
     m_deleteAction->setEnabled(true);
     m_copyAction->setEnabled(true);
+    m_duplicateAction->setEnabled(false);
 }
 
 void ShowManager::slotTrackDoubleClicked(Track *track)
@@ -1461,17 +1666,25 @@ void ShowManager::slotChangeLock()
     if (item != NULL)
     {
         if (item->isLocked() == false)
-            m_lockAction->setIcon(QIcon(":/unlock.png"));
+            m_lockAction->setIcon(AppIcons::icon("unlock", 24));
         else
-            m_lockAction->setIcon(QIcon(":/lock.png"));
+            m_lockAction->setIcon(AppIcons::icon("lock", 24));
         item->setLocked(!item->isLocked());
     }
 }
 
 void ShowManager::slotShowTimingsTool()
 {
-    ShowItem *item = m_showview->getSelectedItem();
+    showTimingsTool(m_showview->getSelectedItem());
+}
 
+void ShowManager::slotShowItemTimings(ShowItem *item)
+{
+    showTimingsTool(item);
+}
+
+void ShowManager::showTimingsTool(ShowItem *item)
+{
     if (item == NULL)
         return;
 
@@ -1484,6 +1697,12 @@ void ShowManager::slotShowTimingsTool()
             tt->showDurationControls(false);
         if (func->type() == Function::RGBMatrixType || func->type() == Function::EFXType)
             tt->showDurationOptions(true);
+        if (func->type() != Function::AudioType &&
+            m_show != NULL && m_show->timeDivisionType() != Show::Time)
+        {
+            tt->setBpmContext(m_show->timeDivisionBPM(), m_show->beatsDivision());
+        }
+        tt->setFunctionContext(func);
     }
 
     connect(tt, SIGNAL(startTimeChanged(ShowItem*,int)),
@@ -1491,6 +1710,121 @@ void ShowManager::slotShowTimingsTool()
     connect(tt, SIGNAL(durationChanged(ShowItem*,int,bool)),
             this, SLOT(slotShowItemDurationChanged(ShowItem*,int,bool)));
     tt->show();
+}
+
+void ShowManager::slotDuplicateItem()
+{
+    duplicateItem(m_showview->getSelectedItem());
+}
+
+void ShowManager::slotShowItemDuplicate(ShowItem *item)
+{
+    duplicateItem(item);
+}
+
+void ShowManager::duplicateItem(ShowItem *item)
+{
+    if (item == NULL || m_show == NULL || item->showFunction() == NULL)
+        return;
+
+    Function *function = m_doc->function(item->functionID());
+    if (function == NULL)
+        return;
+
+    Track *track = m_show->getTrackFromShowFunctionID(item->showFunction()->id());
+    if (track == NULL)
+        return;
+
+    quint32 clipDuration = item->getDuration();
+    if (clipDuration == 0)
+        clipDuration = function->totalDuration();
+
+    const quint32 grid = qMax<quint32>(1, m_showview->getTimeGridStep());
+    quint32 newStart = item->getStartTime() + clipDuration;
+
+    /* Find the next free position after the source clip. */
+    for (int attempt = 0; attempt < 10000; ++attempt)
+    {
+        bool overlaps = false;
+        foreach (ShowFunction *sf, track->showFunctions())
+        {
+            const quint32 otherStart = sf->startTime();
+            const quint32 otherDuration = sf->duration(m_doc);
+            if (otherStart < newStart + clipDuration &&
+                newStart < otherStart + otherDuration)
+            {
+                overlaps = true;
+                break;
+            }
+        }
+
+        if (overlaps == false)
+            break;
+        newStart += grid;
+    }
+
+    ShowFunction *source = item->showFunction();
+    ShowFunction *copy = new ShowFunction(m_show->getLatestShowFunctionId());
+    copy->setFunctionID(function->id());
+    copy->setStartTime(newStart);
+    copy->setDuration(source->duration());
+    copy->setStretch(source->stretch());
+    copy->setFunctionSpeed(source->functionSpeed());
+    if (source->color().isValid())
+        copy->setColor(source->color());
+    else
+        copy->setColor(item->getColor());
+    copy->setLocked(false);
+
+    if (track->addShowFunction(copy) == false)
+    {
+        delete copy;
+        return;
+    }
+
+    bool added = false;
+    switch (function->type())
+    {
+        case Function::ChaserType:
+        case Function::SequenceType:
+            m_showview->addSequence(qobject_cast<Chaser *>(function), track, copy);
+            added = true;
+            break;
+        case Function::AudioType:
+            m_showview->addAudio(qobject_cast<Audio *>(function), track, copy);
+            added = true;
+            break;
+        case Function::RGBMatrixType:
+            m_showview->addRGBMatrix(qobject_cast<RGBMatrix *>(function), track, copy);
+            added = true;
+            break;
+        case Function::EFXType:
+            m_showview->addEFX(qobject_cast<EFX *>(function), track, copy);
+            added = true;
+            break;
+        case Function::VideoType:
+            m_showview->addVideo(qobject_cast<Video *>(function), track, copy);
+            added = true;
+            break;
+        default:
+            break;
+    }
+
+    if (added == false)
+    {
+        track->removeShowFunction(copy);
+        return;
+    }
+
+    if (copy->prepareRuntimeFunction(m_doc) == false)
+        qWarning() << "[ShowManager] Could not prepare duplicated clip runtime";
+    m_currentTrack = track;
+    m_showview->activateTrack(track);
+    m_addSequenceAction->setEnabled(true);
+    m_addAudioAction->setEnabled(true);
+    m_addVideoAction->setEnabled(true);
+    m_showview->updateViewSize();
+    m_doc->setModified();
 }
 
 void ShowManager::slotShowItemStartTimeChanged(ShowItem *item, int msec)
@@ -1512,6 +1846,13 @@ void ShowManager::slotShowItemDurationChanged(ShowItem *item, int msec, bool str
         return;
 
     item->setDuration(msec, stretch);
+    if (item->showFunction() != NULL &&
+        (m_show == NULL || m_show->isRunning() == false))
+    {
+        item->showFunction()->prepareRuntimeFunction(m_doc);
+    }
+    m_showview->updateViewSize();
+    m_showview->viewport()->update();
     m_doc->setModified();
 }
 
@@ -1562,6 +1903,7 @@ void ShowManager::slotDocClearing()
     m_addAudioAction->setEnabled(false);
     m_addVideoAction->setEnabled(false);
     m_copyAction->setEnabled(false);
+    m_duplicateAction->setEnabled(false);
     m_deleteAction->setEnabled(false);
     m_colorAction->setEnabled(false);
     m_timeLabel->setText("00:00:00.00");
@@ -1579,6 +1921,13 @@ void ShowManager::slotFunctionRemoved(quint32 id)
 {
     if (m_showsCombo->count() == 0)
         return;
+
+    if (m_show != NULL && m_show->isRunning() == true &&
+        m_show->contains(id) == true)
+    {
+        m_show->stop(functionParent());
+        m_show->stopAndWait();
+    }
 
     // check if ID is a Show
     for (int i = 0; i < m_showsCombo->count(); i++)
@@ -1642,16 +1991,19 @@ void ShowManager::updateMultiTrackView()
         return;
     }
 
+    if (m_show->isRunning() == false)
+        m_show->prepareRuntimeFunctions(true);
+
     // disconnect BPM field and update the view manually, to
     // prevent m_show time division override
-    disconnect(m_bpmField, SIGNAL(valueChanged(int)), this, SLOT(slotBPMValueChanged(int)));
+    disconnect(m_bpmField, SIGNAL(valueChanged(double)), this, SLOT(slotBPMValueChanged(double)));
 
     m_bpmField->setValue(m_show->timeDivisionBPM());
     m_showview->setBPMValue(m_show->timeDivisionBPM());
     int tIdx = m_timeDivisionCombo->findData(QVariant(m_show->timeDivisionType()));
     m_timeDivisionCombo->setCurrentIndex(tIdx);
 
-    connect(m_bpmField, SIGNAL(valueChanged(int)), this, SLOT(slotBPMValueChanged(int)));
+    connect(m_bpmField, SIGNAL(valueChanged(double)), this, SLOT(slotBPMValueChanged(double)));
     connect(m_show, SIGNAL(timeChanged(quint32)), this, SLOT(slotUpdateTimeAndCursor(quint32)));
     connect(m_show, SIGNAL(showFinished()), this, SLOT(slotStopPlayback()));
     connect(m_show, SIGNAL(stopped(quint32)), this, SLOT(slotShowStopped()));
@@ -1692,6 +2044,26 @@ void ShowManager::updateMultiTrackView()
                 {
                     Audio *audio = qobject_cast<Audio*>(fn);
                     m_showview->addAudio(audio, track, sf);
+                    if (audio != NULL)
+                    {
+                        connect(audio, &Audio::analysisChanged, this,
+                                [this, audio]()
+                        {
+                            if (m_show != NULL && m_show->contains(audio->id()) == true
+                                && audio->bpm() > 0)
+                                slotAutoBpm();
+                        }, Qt::UniqueConnection);
+                        connect(audio, &Audio::sourceFilenameChanged, this,
+                                [this, audio]()
+                        {
+                            m_analysisStarted.remove(audio->id());
+                        }, Qt::UniqueConnection);
+                        if (audio->hasAnalysis() == false
+                            && m_analysisStarted.contains(audio->id()) == false)
+                        {
+                            analyzeAudio(audio);
+                        }
+                    }
                 }
                 else if (fn->type() == Function::RGBMatrixType)
                 {
@@ -1711,6 +2083,22 @@ void ShowManager::updateMultiTrackView()
             }
         }
     }
+    /* If this Show is still using a plain time grid and contains an
+     * analyzed audio function, adopt its tempo automatically. */
+    if (m_show->timeDivisionType() == Show::Time)
+    {
+        for (quint32 functionId : m_show->components())
+        {
+            Function *function = m_doc->function(functionId);
+            Audio *audio = qobject_cast<Audio *>(function);
+            if (audio != NULL && audio->bpm() > 0)
+            {
+                slotAutoBpm();
+                break;
+            }
+        }
+    }
+
     /** Set first track active */
     if (firstTrack != NULL)
     {
@@ -1719,6 +2107,7 @@ void ShowManager::updateMultiTrackView()
             m_currentScene = qobject_cast<Scene*>(m_doc->function(m_currentTrack->getSceneID()));
         m_showview->activateTrack(m_currentTrack);
         m_copyAction->setEnabled(true);
+        m_duplicateAction->setEnabled(false);
         m_addSequenceAction->setEnabled(true);
         m_addAudioAction->setEnabled(true);
         m_addVideoAction->setEnabled(true);

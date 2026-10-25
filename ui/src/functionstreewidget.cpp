@@ -21,11 +21,33 @@
 #include <QDebug>
 
 #include "functionstreewidget.h"
+#include "appicons.h"
 #include "function.h"
 #include "doc.h"
 
 #define COL_NAME 0
 #define COL_PATH 1
+
+
+static QString functionIconName(Function::Type type)
+{
+    switch (type)
+    {
+    case Function::SceneType:      return "scene";
+    case Function::ChaserType:     return "chaser";
+    case Function::SequenceType:   return "sequence";
+    case Function::EFXType:        return "efx";
+    case Function::CollectionType: return "collection";
+    case Function::RGBMatrixType:  return "rgbmatrix";
+    case Function::ScriptType:     return "script";
+    case Function::ShowType:       return "shows";
+    case Function::AudioType:      return "audio";
+    case Function::VideoType:      return "video";
+    case Function::PathType:       return "path";
+    case Function::Undefined:
+    default:                       return "functions";
+    }
+}
 
 FunctionsTreeWidget::FunctionsTreeWidget(Doc *doc, QWidget *parent) :
     QTreeWidget(parent)
@@ -103,7 +125,7 @@ void FunctionsTreeWidget::updateFunctionItem(QTreeWidgetItem* item, const Functi
     Q_ASSERT(item != NULL);
     Q_ASSERT(function != NULL);
     item->setText(COL_NAME, function->name());
-    item->setIcon(COL_NAME, function->getIcon());
+    item->setIcon(COL_NAME, AppIcons::icon(functionIconName(function->type()), 24));
     item->setData(COL_NAME, Qt::UserRole, function->id());
     item->setData(COL_NAME, Qt::UserRole + 1, function->type());
     item->setFlags(item->flags() & ~Qt::ItemIsDropEnabled);
@@ -122,7 +144,7 @@ QTreeWidgetItem* FunctionsTreeWidget::parentItem(const Function* function)
         // Parent item for the given type doesn't exist yet so create one
         QTreeWidgetItem* item = new QTreeWidgetItem(this);
         item->setText(COL_NAME, basePath);
-        item->setIcon(COL_NAME, function->getIcon());
+        item->setIcon(COL_NAME, AppIcons::icon(functionIconName(function->type()), 24));
         item->setData(COL_NAME, Qt::UserRole, Function::invalidId());
         item->setData(COL_NAME, Qt::UserRole + 1, function->type());
         item->setText(COL_PATH, QString(basePath + "/"));

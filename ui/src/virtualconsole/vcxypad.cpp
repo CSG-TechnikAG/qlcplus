@@ -63,11 +63,12 @@ const quint8 VCXYPad::tiltFineInputSourceId = 5;
 const qreal MAX_VALUE = 256.0;
 const qreal MAX_DMX_VALUE = MAX_VALUE - 1.0/256;
 
-static const QString presetBtnSS = "QPushButton { background-color: %1; height: 32px; border: 2px solid #6A6A6A; border-radius: 5px; }"
-                                   "QPushButton:pressed { border: 2px solid #0000FF; }"
-                                   "QPushButton:checked { border: 2px solid #0000FF; }"
-                                   "QPushButton:unchecked { border: 2px solid #6A6A6A; }"
-                                   "QPushButton:disabled { border: 2px solid #BBBBBB; color: #8f8f8f }";
+static const QString presetBtnSS = "QPushButton { background-color: %1; height: 32px; "
+                                   "border: 1px solid palette(mid); border-radius: 6px; }"
+                                   "QPushButton:pressed, QPushButton:checked "
+                                   "{ border-color: palette(highlight); }"
+                                   "QPushButton:disabled { border-color: palette(mid); "
+                                   "color: palette(mid); }";
 
 /*****************************************************************************
  * VCXYPad Initialization

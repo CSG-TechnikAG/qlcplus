@@ -23,6 +23,15 @@
 #include <QDebug>
 
 #include "universeitemwidget.h"
+#include "theme.h"
+
+static QColor mixColors(const QColor &from, const QColor &to, qreal progress)
+{
+    const qreal t = qBound(0.0, progress, 1.0);
+    return QColor::fromRgbF(from.redF() + (to.redF() - from.redF()) * t,
+                            from.greenF() + (to.greenF() - from.greenF()) * t,
+                            from.blueF() + (to.blueF() - from.blueF()) * t);
+}
 
 UniverseItemWidget::UniverseItemWidget(QWidget *parent)
     : QItemDelegate(parent)
@@ -47,25 +56,60 @@ void UniverseItemWidget::paint(QPainter *painter, const QStyleOptionViewItem &op
     // draw background gradient
     QLinearGradient linearGrad(r.left(), r.top(), r.left(), r.height() + r.top());
 
-    if (option.state & QStyle::State_Selected)
+    Theme *theme = Theme::instance();
+    const bool selected = (option.state & QStyle::State_Selected) != 0;
+
+    QColor textColor;
+    QColor borderColor;
+
+    if (theme->scheme() == Theme::Classic)
     {
-        linearGrad.setColorAt(0, QColor(50, 64, 75, 255));
-        linearGrad.setColorAt(1, QColor(76, 98, 115, 255));
-        painter->setPen(QPen(QColor(48, 61, 72, 255), 2));
+        /* Preserve the stock look exactly */
+        if (selected)
+        {
+            linearGrad.setColorAt(0, QColor(50, 64, 75, 255));
+            linearGrad.setColorAt(1, QColor(76, 98, 115, 255));
+            borderColor = QColor(48, 61, 72, 255);
+            textColor = QColor(200, 200, 200, 255);
+        }
+        else
+        {
+            linearGrad.setColorAt(0, QColor(255, 255, 255, 255));
+            linearGrad.setColorAt(1, QColor(128, 128, 128, 255));
+            borderColor = QColor(30, 30, 30, 255);
+            textColor = QColor(0, 0, 0, 255);
+        }
     }
     else
     {
-        linearGrad.setColorAt(0, QColor(255, 255, 255, 255));
-        linearGrad.setColorAt(1, QColor(128, 128, 128, 255));
-        painter->setPen(QPen(QColor(30, 30, 30, 255), 2));
+        const QColor accent = theme->accent();
+        const QColor bg = theme->color(Theme::Background);
+        const QColor surface = theme->color(Theme::Surface);
+        const QColor raised = theme->color(Theme::SurfaceRaised);
+
+        if (selected)
+        {
+            linearGrad.setColorAt(0, mixColors(accent, bg, 0.72));
+            linearGrad.setColorAt(1, mixColors(accent, bg, 0.55));
+            borderColor = accent;
+            /* The gradient is mixed towards the theme background, so use the
+             * theme text color rather than the accent's foreground color. */
+            textColor = theme->color(Theme::Text);
+        }
+        else
+        {
+            linearGrad.setColorAt(0, raised);
+            linearGrad.setColorAt(1, surface);
+            borderColor = theme->color(Theme::Border);
+            textColor = theme->color(Theme::Text);
+        }
     }
+
+    painter->setPen(QPen(borderColor, 2));
     painter->setBrush(linearGrad);
     painter->drawRoundedRect(r.left() + 2, r.top() + 2, pWidth - 6, r.height() - 4, 5, 5);
 
-    if (option.state & QStyle::State_Selected)
-        painter->setPen(QPen(QColor(200, 200, 200, 255), 2));
-    else
-        painter->setPen(QPen(QColor(0, 0, 0, 255), 2));
+    painter->setPen(QPen(textColor, 2));
 
     // draw universe name
     painter->setFont(font);

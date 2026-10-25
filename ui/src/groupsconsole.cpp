@@ -68,7 +68,7 @@ void GroupsConsole::init()
             ConsoleChannel* cc = new ConsoleChannel(this, m_doc, scv.fxi, scv.channel, false);
             cc->setLabel(grp->name());
             cc->setChannelsGroup(id);
-            cc->setChannelStyleSheet(CNG_DEFAULT_STYLE);
+            cc->setChannelStyleSheet(cngDefaultStyle());
             if (idx < m_levels.count())
                 cc->setValue(m_levels.at(idx));
             layout()->addWidget(cc);

@@ -26,6 +26,8 @@
 #include "vcaudiotriggersproperties.h"
 #include "vcpropertieseditor.h"
 #include "vcaudiotriggers.h"
+#include "appicons.h"
+#include "theme.h"
 #include "audiocapture.h"
 #include "genericfader.h"
 #include "fadechannel.h"
@@ -72,11 +74,8 @@ VCAudioTriggers::VCAudioTriggers(QWidget* parent, Doc* doc)
     m_button->setIconSize(QSize(32, 32));
     m_button->setMinimumSize(QSize(32, 32));
     m_button->setMaximumSize(QSize(32, 32));
-    m_button->setIcon(QIcon(":/check.png"));
+    m_button->setIcon(AppIcons::icon("check", 20));
     m_button->setCheckable(true);
-    QString btnSS = "QToolButton { background-color: #E0DFDF; border: 1px solid gray; border-radius: 3px; padding: 3px; } ";
-    btnSS += "QToolButton:checked { background-color: #D7DE75; border: 1px solid gray; border-radius: 3px; padding: 3px; } ";
-    m_button->setStyleSheet(btnSS);
     m_button->setEnabled(false);
 
     m_hbox->addWidget(m_button);
@@ -84,11 +83,11 @@ VCAudioTriggers::VCAudioTriggers(QWidget* parent, Doc* doc)
 
     m_label = new QLabel(this);
     m_label->setText(this->caption());
-    QString txtColor = "white";
-    if (m_hasCustomForegroundColor)
-        txtColor = this->foregroundColor().name();
-    m_label->setStyleSheet("QLabel { background-color: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #345D27, stop: 1 #0E1A0A); "
-                           "color: " + txtColor + "; border-radius: 3px; padding: 3px; margin-left: 2px; }");
+    updateLabelStyle();
+    connect(Theme::instance(), &Theme::changed, this, [this]()
+    {
+        updateLabelStyle();
+    });
 
     if (m_hasCustomFont)
         m_label->setFont(font());
@@ -118,10 +117,15 @@ VCAudioTriggers::VCAudioTriggers(QWidget* parent, Doc* doc)
     m_volumeSlider = new ClickAndGoSlider(this);
     m_volumeSlider->setOrientation(Qt::Vertical);
     m_volumeSlider->setRange(0, 100);
-    m_volumeSlider->setSliderStyleSheet(CNG_DEFAULT_STYLE);
+    m_volumeSlider->setSliderStyleSheet(cngDefaultStyle());
     m_volumeSlider->setValue(100);
     m_volumeSlider->setFixedWidth(32);
     m_volumeSlider->setEnabled(false);
+    connect(Theme::instance(), &Theme::changed, this, [this]()
+    {
+        if (m_volumeSlider != NULL)
+            m_volumeSlider->setSliderStyleSheet(cngDefaultStyle());
+    });
 
     connect(m_volumeSlider, SIGNAL(valueChanged(int)),
             this, SLOT(slotVolumeChanged(int)));
@@ -449,11 +453,29 @@ void VCAudioTriggers::setForegroundColor(const QColor &color)
 {
     if (m_label != NULL)
     {
-        m_label->setStyleSheet("QLabel { background-color: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #345D27, stop: 1 #0E1A0A); "
-                               "color: " + color.name() + "; border-radius: 3px; padding: 3px; margin-left: 2px; }");
+        QPalette pal = m_label->palette();
+        pal.setColor(QPalette::WindowText, color);
+        m_label->setPalette(pal);
         m_hasCustomForegroundColor = true;
+        updateLabelStyle();
         m_doc->setModified();
     }
+}
+
+void VCAudioTriggers::updateLabelStyle()
+{
+    if (m_label == NULL)
+        return;
+
+    Theme *theme = Theme::instance();
+    const QColor fg = m_hasCustomForegroundColor ? foregroundColor()
+                                                 : theme->color(Theme::Text);
+    m_label->setStyleSheet(QString("QLabel { background-color: %1; color: %2; "
+                                   "border: 1px solid %3; border-radius: 5px; "
+                                   "padding: 3px; margin-left: 2px; }")
+                           .arg(theme->color(Theme::SurfaceRaised).name())
+                           .arg(fg.name())
+                           .arg(theme->color(Theme::Border).name()));
 }
 
 QColor VCAudioTriggers::foregroundColor() const

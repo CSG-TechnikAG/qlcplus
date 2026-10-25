@@ -18,6 +18,7 @@
 */
 
 #include <QGraphicsSceneMouseEvent>
+#include <QGraphicsProxyWidget>
 #include <QGraphicsItem>
 #include <QGraphicsScene>
 #include <QGraphicsView>
@@ -26,12 +27,40 @@
 #include <QScrollBar>
 #include <QSlider>
 #include <QDebug>
+#include <qmath.h>
 
 #include "multitrackview.h"
+#include "theme.h"
 #include "track.h"
 
 #define VIEW_DEFAULT_WIDTH  2000
 #define VIEW_DEFAULT_HEIGHT 600
+
+#define ZOOM_SLIDER_MIN     0
+#define ZOOM_SLIDER_MAX     100
+#define ZOOM_SLIDER_DEFAULT 50
+
+/* A QSlider that does not react to the mouse wheel just because the pointer
+ * happens to be over it. Zooming is explicit: drag the slider or use
+ * Ctrl+wheel over the timeline. */
+class ShowZoomSlider final : public QSlider
+{
+public:
+    explicit ShowZoomSlider(QWidget *parent = NULL)
+        : QSlider(Qt::Horizontal, parent) {}
+
+protected:
+    void wheelEvent(QWheelEvent *event) override
+    {
+        event->ignore();
+    }
+};
+
+static qreal timeScaleForSlider(int value)
+{
+    /* Value 50 is the historical default (3). Higher values zoom in. */
+    return 3.0 * qPow(2.0, (qreal(ZOOM_SLIDER_DEFAULT) - qreal(value)) / 15.0);
+}
 
 MultiTrackView::MultiTrackView(QWidget *parent) :
         QGraphicsView(parent)
@@ -41,29 +70,20 @@ MultiTrackView::MultiTrackView(QWidget *parent) :
     setSceneRect(0, 0, VIEW_DEFAULT_WIDTH, VIEW_DEFAULT_HEIGHT);
     setScene(m_scene);
 
-    m_timeSlider = new QSlider(Qt::Horizontal);
-    m_timeSlider->setRange(1, 15);
-    m_timeSlider->setValue(3);
+    m_timeSlider = new ShowZoomSlider();
+    m_timeSlider->setRange(ZOOM_SLIDER_MIN, ZOOM_SLIDER_MAX);
+    m_timeSlider->setValue(ZOOM_SLIDER_DEFAULT);
     m_timeSlider->setSingleStep(1);
+    m_timeSlider->setPageStep(5);
+    m_timeSlider->setToolTip(tr("Timeline zoom"));
     m_timeSlider->setFixedSize(TRACK_WIDTH - 4, HEADER_HEIGHT);
 
-    m_timeSlider->setStyleSheet("QSlider { background-color: #969696; }"
-                          "QSlider::groove:horizontal {"
-                          "border: 1px solid #999999;"
-                          "height: 10px;"
-                          "background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #b1b1b1, stop:1 #d4d4d4);"
-                          "}"
-                          "QSlider::handle:horizontal {"
-                          "background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #c4c4c4, stop:1 #8f8f8f);"
-                          "border: 1px solid #5c5c5c;"
-                          "width: 20px;"
-                          "margin: -2px 0; /* handle is placed by default on the contents rect of the groove. Expand outside the groove */"
-                          "border-radius: 4px;"
-                          "}");
     connect(m_timeSlider, SIGNAL(valueChanged(int)), this, SLOT(slotTimeScaleChanged(int)));
-    m_scene->addWidget(m_timeSlider);
+    m_timeSliderProxy = m_scene->addWidget(m_timeSlider);
+    m_timeSliderProxy->setZValue(1000);
 
     m_header = new ShowHeaderItem(m_scene->width());
+    m_header->setTimeScale(timeScaleForSlider(m_timeSlider->value()));
     m_header->setPos(TRACK_WIDTH, 0);
     connect(m_header, SIGNAL(itemClicked(QGraphicsSceneMouseEvent *)),
             this, SLOT(slotHeaderClicked(QGraphicsSceneMouseEvent *)));
@@ -75,6 +95,7 @@ MultiTrackView::MultiTrackView(QWidget *parent) :
     m_cursor->setZValue(999); // make sure the cursor is always on top of everything else
     m_scene->addItem(m_cursor);
     connect(horizontalScrollBar(), SIGNAL(valueChanged(int)), this, SLOT(slotViewScrolled(int)));
+    connect(verticalScrollBar(), SIGNAL(valueChanged(int)), this, SLOT(slotViewScrolled(int)));
 
     m_vdivider = NULL;
     // draw horizontal and vertical lines for tracks
@@ -99,16 +120,16 @@ void MultiTrackView::updateTracksDividers()
         hDivNum = m_tracks.count();
     for (int j = 0; j < hDivNum; j++)
     {
+        const QColor divider = Theme::instance()->color(Theme::Border);
         QGraphicsItem *item = m_scene->addRect(0, ypos + (j * TRACK_HEIGHT),
                                                m_scene->width(), 1,
-                                               QPen(QColor(150, 150, 150, 255)),
-                                               QBrush(QColor(190, 190, 190, 255)));
+                                               QPen(divider), QBrush(divider));
         item->setZValue(-1);
         m_hdividers.append(item);
     }
+    const QColor divider = Theme::instance()->color(Theme::Border);
     m_vdivider = m_scene->addRect(TRACK_WIDTH - 3, 0, 3, m_scene->height(),
-                        QPen(QColor(150, 150, 150, 255)),
-                        QBrush(QColor(190, 190, 190, 255)));
+                        QPen(divider), QBrush(divider));
 }
 
 void MultiTrackView::setViewSize(int width, int height)
@@ -121,6 +142,7 @@ void MultiTrackView::setViewSize(int width, int height)
     else
         m_header->setHeight(HEADER_HEIGHT);
     updateTracksDividers();
+    updateFixedItems();
 }
 
 void MultiTrackView::updateViewSize()
@@ -156,6 +178,7 @@ void MultiTrackView::resetView()
     m_items.clear();
 
     rewindCursor();
+    updateFixedItems();
     this->horizontalScrollBar()->setSliderPosition(0);
     this->verticalScrollBar()->setSliderPosition(0);
     m_scene->update();
@@ -175,6 +198,7 @@ void MultiTrackView::addTrack(Track *track)
     trackItem->setPos(0, HEADER_HEIGHT + (TRACK_HEIGHT * m_tracks.count()));
     m_scene->addItem(trackItem);
     m_tracks.append(trackItem);
+    updateFixedItems();
     activateTrack(track);
     connect(trackItem, SIGNAL(itemClicked(TrackItem*)),
             this, SLOT(slotTrackClicked(TrackItem*)));
@@ -196,22 +220,29 @@ void MultiTrackView::setItemCommonProperties(ShowItem *item, ShowFunction *func,
 
     item->setTrackIndex(trackNum);
 
-    int timeScale = m_timeSlider->value();
+    qreal timeScale = m_header->getTimeScale();
 
     if (func->startTime() == UINT_MAX)
     {
         item->setStartTime(getTimeFromCursor());
-        item->setPos(m_cursor->x() + 2, 36 + (trackNum * TRACK_HEIGHT));
+        item->setPos(m_cursor->x(), 36 + (trackNum * TRACK_HEIGHT));
     }
     else
-        item->setPos(getPositionFromTime(func->startTime()) + 2, 36 + (trackNum * TRACK_HEIGHT));
+        item->setPos(getPositionFromTime(func->startTime()), 36 + (trackNum * TRACK_HEIGHT));
 
     item->setTimeScale(timeScale);
+    item->setResizeGridStep(resizeGridStep());
 
     connect(item, SIGNAL(itemDropped(QGraphicsSceneMouseEvent *, ShowItem *)),
             this, SLOT(slotItemMoved(QGraphicsSceneMouseEvent *, ShowItem *)));
     connect(item, SIGNAL(alignToCursor(ShowItem*)),
             this, SLOT(slotAlignToCursor(ShowItem*)));
+    connect(item, SIGNAL(itemResized(ShowItem*)),
+            this, SIGNAL(showItemResized(ShowItem*)));
+    connect(item, SIGNAL(timingsRequested(ShowItem*)),
+            this, SIGNAL(showItemTimingsRequested(ShowItem*)));
+    connect(item, SIGNAL(duplicateRequested(ShowItem*)),
+            this, SIGNAL(showItemDuplicateRequested(ShowItem*)));
     m_scene->addItem(item);
     m_items.append(item);
     int new_scene_width = item->x() + item->getWidth();
@@ -381,7 +412,7 @@ void MultiTrackView::deleteShowItem(Track *track, ShowFunction *sf)
 
 void MultiTrackView::moveCursor(quint32 timePos)
 {
-    int newPos = getPositionFromTime(timePos);
+    qreal newPos = getPositionFromTime(timePos);
     m_cursor->setPos(newPos, 0);
     m_cursor->setTime(timePos);
 }
@@ -427,14 +458,11 @@ quint32 MultiTrackView::getTimeFromPosition(qreal pos) const
             (double)(m_header->getHalfSecondWidth() * 2));
 }
 
-quint32 MultiTrackView::getPositionFromTime(quint32 time) const
+qreal MultiTrackView::getPositionFromTime(quint32 time) const
 {
-    if (time == 0)
-        return TRACK_WIDTH;
-    quint32 xPos = ((double)time / 500) *
-                    ((double)m_header->getHalfSecondWidth() /
-                     (double)m_header->getTimeScale());
-    return TRACK_WIDTH + xPos;
+    const qreal pixelsPerSecond = qreal(m_header->getHalfSecondWidth() * 2) /
+                                  qreal(m_header->getTimeScale());
+    return qreal(TRACK_WIDTH) + (qreal(time) * pixelsPerSecond / 1000.0);
 }
 
 int MultiTrackView::getTrackIndex(const Track *trk) const
@@ -452,6 +480,7 @@ int MultiTrackView::getTrackIndex(const Track *trk) const
 void MultiTrackView::setHeaderType(Show::TimeDivision type)
 {
     m_header->setTimeDivisionType(type);
+    updateItemsResizeGrid();
 }
 
 Show::TimeDivision MultiTrackView::getHeaderType() const
@@ -459,9 +488,36 @@ Show::TimeDivision MultiTrackView::getHeaderType() const
     return m_header->getTimeDivisionType();
 }
 
-void MultiTrackView::setBPMValue(int value)
+void MultiTrackView::setBPMValue(double value)
 {
     m_header->setBPMValue(value);
+    updateItemsResizeGrid();
+}
+
+quint32 MultiTrackView::getTimeGridStep() const
+{
+    if (m_header == NULL)
+        return 1000;
+
+    const qreal stepPixels = m_header->getTimeDivisionStep();
+    const qreal stepMs = (stepPixels * m_header->getTimeScale() * 1000.0) /
+                         (m_header->getHalfSecondWidth() * 2.0);
+    return qMax<quint32>(1, quint32(qRound(stepMs)));
+}
+
+quint32 MultiTrackView::resizeGridStep() const
+{
+    if (m_snapToGrid == false)
+        return 0;
+
+    return getTimeGridStep();
+}
+
+void MultiTrackView::updateItemsResizeGrid()
+{
+    const quint32 step = resizeGridStep();
+    foreach (ShowItem *item, m_items)
+        item->setResizeGridStep(step);
 }
 
 void MultiTrackView::setSnapToGrid(bool enable)
@@ -471,6 +527,7 @@ void MultiTrackView::setSnapToGrid(bool enable)
         m_header->setHeight(m_scene->height());
     else
         m_header->setHeight(HEADER_HEIGHT);
+    updateItemsResizeGrid();
 }
 
 void MultiTrackView::mouseReleaseEvent(QMouseEvent * e)
@@ -521,18 +578,19 @@ void MultiTrackView::slotHeaderClicked(QGraphicsSceneMouseEvent *event)
 
 void MultiTrackView::slotTimeScaleChanged(int val)
 {
-    //int oldScale = m_header->getTimeScale();
-    m_header->setTimeScale(val);
+    const qreal timeScale = timeScaleForSlider(val);
+    m_header->setTimeScale(timeScale);
 
     foreach (ShowItem *item, m_items)
     {
-        quint32 newXpos = getPositionFromTime(item->getStartTime());
-        item->setPos(newXpos + 2, item->y());
-        item->setTimeScale(val);
+        qreal newXpos = getPositionFromTime(item->getStartTime());
+        item->setPos(newXpos, item->y());
+        item->setTimeScale(timeScale);
     }
 
-    int newCursorPos = getPositionFromTime(m_cursor->getTime());
-    m_cursor->setPos(newCursorPos + 2, m_cursor->y());
+    qreal newCursorPos = getPositionFromTime(m_cursor->getTime());
+    m_cursor->setPos(newCursorPos, m_cursor->y());
+    updateItemsResizeGrid();
     updateViewSize();
 }
 
@@ -574,7 +632,24 @@ void MultiTrackView::slotTrackMuteFlagChanged(TrackItem* item, bool mute)
 
 void MultiTrackView::slotViewScrolled(int)
 {
-    //qDebug() << Q_FUNC_INFO << "Percentage: " << value;
+    updateFixedItems();
+}
+
+void MultiTrackView::updateFixedItems()
+{
+    const qreal left = horizontalScrollBar()->value();
+
+    /* The track-name column and the zoom slider are part of the scene for
+     * historical reasons, but they must stay anchored to the viewport while
+     * the timeline scrolls underneath them. */
+    foreach (TrackItem *track, m_tracks)
+        track->setX(left);
+
+    if (m_vdivider != NULL)
+        m_vdivider->setX(left + TRACK_WIDTH - 3);
+
+    if (m_timeSliderProxy != NULL)
+        m_timeSliderProxy->setPos(left, verticalScrollBar()->value());
 }
 
 void MultiTrackView::slotItemMoved(QGraphicsSceneMouseEvent *event, ShowItem *item)
@@ -587,9 +662,9 @@ void MultiTrackView::slotItemMoved(QGraphicsSceneMouseEvent *event, ShowItem *it
     int ypos = HEADER_HEIGHT + 1 + (trackNum * TRACK_HEIGHT);
     int shift = qAbs(item->getDraggingPos().x() - item->x());
 
-    if (item->x() < TRACK_WIDTH + 2)
+    if (item->x() < TRACK_WIDTH)
     {
-        item->setPos(TRACK_WIDTH + 2, ypos); // avoid moving an item too early...
+        item->setPos(TRACK_WIDTH, ypos); // avoid moving an item too early...
     }
     else if (shift < 3) // a drag of less than 3 pixel doesn't move the item
     {
@@ -600,15 +675,24 @@ void MultiTrackView::slotItemMoved(QGraphicsSceneMouseEvent *event, ShowItem *it
     }
     else if (m_snapToGrid == true)
     {
-        float step = m_header->getTimeDivisionStep();
-        float gridPos = ((int)(item->x() / step) * step);
-        item->setPos(gridPos + 2, ypos);
+        const qreal step = m_header->getTimeDivisionStep();
+        /* Grid lines are measured from the timeline origin, not from the
+         * scene origin (which also contains the track-name column). */
+        const qreal offset = qRound((item->x() - TRACK_WIDTH) / step) * step;
+        const qreal gridPos = TRACK_WIDTH + offset;
+        item->setPos(gridPos, ypos);
         s_time = getTimeFromPosition(gridPos);
+
+        /* Audio clips may start with a pickup. Let them align an internal
+         * detected beat to the grid, then move the clip edge accordingly. */
+        const quint32 pointerTime = getTimeFromPosition(item->x() + event->pos().x());
+        s_time = item->snapStartTime(s_time, getTimeGridStep(), pointerTime);
+        item->setPos(getPositionFromTime(s_time), ypos);
     }
     else
     {
         item->setPos(item->x(), ypos);
-        s_time = getTimeFromPosition(item->x() - 2);
+        s_time = getTimeFromPosition(item->x());
     }
 
     item->setStartTime(s_time);

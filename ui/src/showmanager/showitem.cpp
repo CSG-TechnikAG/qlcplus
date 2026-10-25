@@ -18,6 +18,7 @@
 */
 
 #include <QGraphicsSceneEvent>
+#include <QGraphicsSceneHoverEvent>
 #include <QApplication>
 #include <QPainter>
 #include <QDebug>
@@ -26,22 +27,32 @@
 #include "headeritems.h"
 #include "trackitem.h"
 #include "showitem.h"
+#include "theme.h"
+#include "appicons.h"
 #include "function.h"
 
 ShowItem::ShowItem(ShowFunction *function, QObject *)
     : m_color(100, 100, 100)
     , m_locked(false)
     , m_pressed(false)
+    , m_resizing(false)
+    , m_resizeChanged(false)
+    , m_resizeStartWidth(0)
+    , m_resizeStartDuration(0)
+    , m_resizeGridStep(0)
     , m_width(50)
-    , m_timeScale(3)
+    , m_timeScale(3.0)
     , m_trackIdx(-1)
     , m_function(function)
     , m_alignToCursor(NULL)
     , m_lockAction(NULL)
+    , m_timingsAction(NULL)
+    , m_duplicateAction(NULL)
 {
     Q_ASSERT(function != NULL);
 
     setCursor(Qt::OpenHandCursor);
+    setAcceptHoverEvents(true);
     setFlag(QGraphicsItem::ItemIsSelectable, true);
 
     m_font = qApp->font();
@@ -56,6 +67,14 @@ ShowItem::ShowItem(ShowFunction *function, QObject *)
     m_lockAction = new QAction(tr("Lock item"), this);
     connect(m_lockAction, SIGNAL(triggered()),
             this, SLOT(slotLockItemClicked()));
+    m_timingsAction = new QAction(AppIcons::icon("clock", 16),
+                                  tr("Start time and duration..."), this);
+    connect(m_timingsAction, SIGNAL(triggered()),
+            this, SLOT(slotTimingsClicked()));
+    m_duplicateAction = new QAction(AppIcons::icon("copy-check", 16),
+                                    tr("Duplicate clip"), this);
+    connect(m_duplicateAction, SIGNAL(triggered()),
+            this, SLOT(slotDuplicateClicked()));
 }
 
 void ShowItem::updateTooltip()
@@ -63,10 +82,17 @@ void ShowItem::updateTooltip()
     if (m_function == NULL)
         return;
 
-    setToolTip(QString(tr("Name: %1\nStart time: %2\nDuration: %3\n%4"))
+    QString details;
+    if (m_function->functionSpeed() > 0)
+        details += tr("Clip speed: %1\n").arg(Function::speedToString(m_function->functionSpeed()));
+    if (m_function->stretch() == true)
+        details += tr("Source function stretched to the clip duration\n");
+
+    setToolTip(QString(tr("Name: %1\nStart time: %2\nDuration: %3\n%4%5"))
               .arg(functionName())
               .arg(Function::speedToString(m_function->startTime()))
               .arg(Function::speedToString(getDuration()))
+              .arg(details)
               .arg(tr("Click to move this item along the timeline")));
 }
 
@@ -78,25 +104,27 @@ QList<QAction *> ShowItem::getDefaultActions() const
     if (isLocked())
     {
         m_lockAction->setText(tr("Unlock item"));
-        m_lockAction->setIcon(QIcon(":/unlock.png"));
+        m_lockAction->setIcon(AppIcons::icon("unlock", 16));
     }
     else
     {
         m_lockAction->setText(tr("Lock item"));
-        m_lockAction->setIcon(QIcon(":/lock.png"));
+        m_lockAction->setIcon(AppIcons::icon("lock", 16));
     }
     actions.append(m_lockAction);
+    actions.append(m_timingsAction);
+    actions.append(m_duplicateAction);
 
     return actions;
 }
 
-void ShowItem::setTimeScale(int val)
+void ShowItem::setTimeScale(qreal val)
 {
     prepareGeometryChange();
     m_timeScale = val;
 }
 
-int ShowItem::getTimeScale() const
+qreal ShowItem::getTimeScale() const
 {
     return m_timeScale;
 }
@@ -119,12 +147,13 @@ quint32 ShowItem::getStartTime() const
 
 void ShowItem::setDuration(quint32 msec, bool stretch)
 {
-    Q_UNUSED(stretch)
-
     if (m_function == NULL)
         return;
 
     m_function->setDuration(msec);
+    m_function->setStretch(stretch);
+    if (stretch == true)
+        m_function->setFunctionSpeed(0);
     updateTooltip();
 }
 
@@ -133,6 +162,14 @@ quint32 ShowItem::getDuration() const
     if (m_function)
         return m_function->duration();
     return 0;
+}
+
+quint32 ShowItem::snapStartTime(quint32 start, quint32 gridStepMs,
+                                quint32 pointerTime) const
+{
+    Q_UNUSED(gridStepMs)
+    Q_UNUSED(pointerTime)
+    return start;
 }
 
 void ShowItem::setWidth(int w)
@@ -149,6 +186,24 @@ int ShowItem::getWidth() const
 QPointF ShowItem::getDraggingPos() const
 {
     return m_pos;
+}
+
+bool ShowItem::isDurationAdjustable() const
+{
+    return true;
+}
+
+void ShowItem::setResizeGridStep(quint32 msec)
+{
+    m_resizeGridStep = msec;
+}
+
+bool ShowItem::isNearRightEdge(const QPointF &pos) const
+{
+    return (isDurationAdjustable() == true &&
+            m_locked == false &&
+            pos.x() >= qreal(m_width - 7) &&
+            pos.x() <= qreal(m_width + 2));
 }
 
 void ShowItem::setTrackIndex(int idx)
@@ -223,8 +278,31 @@ void ShowItem::slotLockItemClicked()
     //update();
 }
 
+void ShowItem::slotTimingsClicked()
+{
+    emit timingsRequested(this);
+}
+
+void ShowItem::slotDuplicateClicked()
+{
+    emit duplicateRequested(this);
+}
+
 void ShowItem::mousePressEvent(QGraphicsSceneMouseEvent *event)
 {
+    if (event->button() == Qt::LeftButton && isNearRightEdge(event->pos()) == true)
+    {
+        m_resizing = true;
+        m_resizeChanged = false;
+        m_resizeStartWidth = m_width;
+        m_resizeStartDuration = getDuration();
+        m_pressed = false;
+        setSelected(true);
+        setCursor(Qt::SizeHorCursor);
+        event->accept();
+        return;
+    }
+
     QGraphicsItem::mousePressEvent(event);
     m_pos = this->pos();
     if (event->button() == Qt::LeftButton)
@@ -232,8 +310,67 @@ void ShowItem::mousePressEvent(QGraphicsSceneMouseEvent *event)
     this->setSelected(true);
 }
 
+void ShowItem::mouseMoveEvent(QGraphicsSceneMouseEvent *event)
+{
+    if (m_resizing == true)
+    {
+        int width = qMax(1, int(event->pos().x()));
+        const qint64 deltaWidth = qint64(width) - qint64(m_resizeStartWidth);
+        qint64 newDuration = qint64(m_resizeStartDuration) +
+                             qRound64((qreal(deltaWidth) * 1000.0 * m_timeScale) / 50.0);
+        quint32 duration = qMax<quint32>(1, quint32(qMax<qint64>(1, newDuration)));
+
+        if (m_resizeGridStep > 0)
+        {
+            const quint32 steps = qMax<quint32>(1, qRound(qreal(duration) / qreal(m_resizeGridStep)));
+            duration = steps * m_resizeGridStep;
+        }
+
+        if (duration != getDuration())
+        {
+            const bool stretch = (m_function != NULL && m_function->stretch());
+            setDuration(duration, stretch);
+            m_resizeChanged = true;
+        }
+
+        event->accept();
+        return;
+    }
+
+    QGraphicsItem::mouseMoveEvent(event);
+}
+
+void ShowItem::hoverMoveEvent(QGraphicsSceneHoverEvent *event)
+{
+    if (isNearRightEdge(event->pos()) == true)
+        setCursor(Qt::SizeHorCursor);
+    else
+        setCursor(Qt::OpenHandCursor);
+
+    QGraphicsItem::hoverMoveEvent(event);
+}
+
+void ShowItem::hoverLeaveEvent(QGraphicsSceneHoverEvent *event)
+{
+    if (m_resizing == false)
+        setCursor(Qt::OpenHandCursor);
+
+    QGraphicsItem::hoverLeaveEvent(event);
+}
+
 void ShowItem::mouseReleaseEvent(QGraphicsSceneMouseEvent *event)
 {
+    if (m_resizing == true)
+    {
+        m_resizing = false;
+        setCursor(Qt::OpenHandCursor);
+        if (m_resizeChanged == true)
+            emit itemResized(this);
+        m_resizeChanged = false;
+        event->accept();
+        return;
+    }
+
     QGraphicsItem::mouseReleaseEvent(event);
     qDebug() << Q_FUNC_INFO << "mouse RELEASE event - <" << event->pos().toPoint().x() << "> - <" << event->pos().toPoint().y() << ">";
     setCursor(Qt::OpenHandCursor);
@@ -254,14 +391,16 @@ void ShowItem::contextMenuEvent(QGraphicsSceneContextMenuEvent *event)
     if (isLocked())
     {
         m_lockAction->setText(tr("Unlock item"));
-        m_lockAction->setIcon(QIcon(":/unlock.png"));
+        m_lockAction->setIcon(AppIcons::icon("unlock", 16));
     }
     else
     {
         m_lockAction->setText(tr("Lock item"));
-        m_lockAction->setIcon(QIcon(":/lock.png"));
+        m_lockAction->setIcon(AppIcons::icon("lock", 16));
     }
     menu.addAction(m_lockAction);
+    menu.addAction(m_timingsAction);
+    menu.addAction(m_duplicateAction);
     menu.exec(QCursor::pos());
 }
 
@@ -277,13 +416,25 @@ void ShowItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, 
     Q_UNUSED(widget);
 
     if (this->isSelected() == true)
-        painter->setPen(QPen(Qt::white, 3));
+        painter->setPen(QPen(Theme::instance()->accent(), 3));
     else
-        painter->setPen(QPen(Qt::white, 1));
+        painter->setPen(QPen(Theme::instance()->color(Theme::BorderStrong), 1));
 
     // draw item background
     painter->setBrush(QBrush(m_color));
     painter->drawRect(0, 0, m_width, TRACK_HEIGHT - 3);
+
+    /* Draw a small handle on the right edge of selected items to make the
+     * duration resizing discoverable. */
+    if (isSelected() == true && isDurationAdjustable() == true && m_locked == false)
+    {
+        QColor handle = Theme::contrastingText(m_color);
+        handle.setAlpha(190);
+        painter->setPen(QPen(handle, 1));
+        const int handleX = qMax(2, m_width - 6);
+        for (int i = 0; i < 3; ++i)
+            painter->drawLine(handleX + (i * 2), 4, handleX + (i * 2), TRACK_HEIGHT - 8);
+    }
 
     painter->setFont(m_font);
 }
@@ -299,13 +450,16 @@ void ShowItem::postPaint(QPainter *painter)
     painter->drawText(QRect(3, 5, m_width - 5, 72), Qt::AlignLeft | Qt::TextWordWrap, functionName());
 
     if (m_locked)
-        painter->drawPixmap(3, TRACK_HEIGHT >> 1, 24, 24, QIcon(":/lock.png").pixmap(24, 24));
+        painter->drawPixmap(3, TRACK_HEIGHT >> 1, 24, 24,
+                             AppIcons::pixmap("lock", 24,
+                                              AppIcons::palette(AppIcons::Action, AppIcons::Normal),
+                                              painter->device()->devicePixelRatioF()));
 
     if (m_pressed)
     {
         quint32 s_time = 0;
         if (x() > TRACK_WIDTH)
-            s_time = (double)(x() - TRACK_WIDTH - 2) * (m_timeScale * 500) /
+            s_time = (double)(x() - TRACK_WIDTH) * (m_timeScale * 500) /
                      (double)(HALF_SECOND_WIDTH);
         painter->drawText(3, TRACK_HEIGHT - 10, Function::speedToString(s_time));
     }

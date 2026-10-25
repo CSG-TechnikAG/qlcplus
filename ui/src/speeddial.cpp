@@ -31,6 +31,7 @@
 #include <qmath.h>
 
 #include "speeddial.h"
+#include "appicons.h"
 #include "qlcmacros.h"
 #include "function.h"
 
@@ -47,13 +48,17 @@
 
 #define DEFAULT_VISIBILITY_MASK 0x00FF
 
-const QString tapDefaultSS = "QPushButton { background-color: #DDDDDD; border: 2px solid #6A6A6A; border-radius: 5px; }"
-                             "QPushButton:pressed { background-color: #AAAAAA; }"
-                             "QPushButton:disabled { border: 2px solid #BBBBBB; }";
+const QString tapDefaultSS = "QPushButton { background-color: palette(button); color: palette(button-text); "
+                             "border: 2px solid palette(mid); border-radius: 5px; }"
+                             "QPushButton:pressed { background-color: palette(dark); }"
+                             "QPushButton:disabled { border: 2px solid palette(mid); "
+                             "color: palette(mid); }";
 
-const QString tapTickSS = "QPushButton { background-color: #DDDDDD; border: 3px solid #2B2595; border-radius: 5px; }"
-                          "QPushButton:pressed { background-color: #AAAAAA; }"
-                          "QPushButton:disabled { border: 2px solid #BBBBBB; }";
+const QString tapTickSS = "QPushButton { background-color: palette(button); color: palette(button-text); "
+                          "border: 3px solid palette(highlight); border-radius: 5px; }"
+                          "QPushButton:pressed { background-color: palette(dark); }"
+                          "QPushButton:disabled { border: 2px solid palette(mid); "
+                          "color: palette(mid); }";
 
 /****************************************************************************
  * FocusSpinBox
@@ -103,14 +108,14 @@ SpeedDial::SpeedDial(QWidget* parent)
 
     m_plus = new QToolButton(this);
     m_plus->setIconSize(QSize(32, 32));
-    m_plus->setIcon(QIcon(":/edit_add.png"));
+    m_plus->setIcon(AppIcons::icon("plus", 24));
     pmVBox1->addWidget(m_plus, Qt::AlignVCenter | Qt::AlignLeft);
     connect(m_plus, SIGNAL(pressed()), this, SLOT(slotPlusMinus()));
     connect(m_plus, SIGNAL(released()), this, SLOT(slotPlusMinus()));
 
     m_minus = new QToolButton(this);
     m_minus->setIconSize(QSize(32, 32));
-    m_minus->setIcon(QIcon(":/edit_remove.png"));
+    m_minus->setIcon(AppIcons::icon("minus", 24));
     pmVBox1->addWidget(m_minus, Qt::AlignVCenter | Qt::AlignLeft);
     connect(m_minus, SIGNAL(pressed()), this, SLOT(slotPlusMinus()));
     connect(m_minus, SIGNAL(released()), this, SLOT(slotPlusMinus()));

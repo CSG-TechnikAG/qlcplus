@@ -24,6 +24,7 @@
 #include <QMenu>
 
 #include "audioitem.h"
+#include "theme.h"
 #include "trackitem.h"
 #include "audiodecoder.h"
 #include "audioplugincache.h"
@@ -49,6 +50,7 @@ AudioItem::AudioItem(Audio *aud, ShowFunction *func)
     calculateWidth();
     connect(m_audio, SIGNAL(changed(quint32)),
             this, SLOT(slotAudioChanged(quint32)));
+    connect(m_audio, &Audio::analysisChanged, this, [this]() { update(); });
 
     /* Preview actions */
     m_previewLeftAction = new QAction(tr("Preview Left Channel"), this);
@@ -71,12 +73,12 @@ void AudioItem::calculateWidth()
     qint64 audio_duration = m_audio->totalDuration();
 
     if (audio_duration != 0)
-        newWidth = ((50/(float)getTimeScale()) * (float)audio_duration) / 1000;
+        newWidth = qRound((50.0 / double(getTimeScale())) * double(audio_duration) / 1000.0);
     else
         newWidth = 100;
 
-    if (newWidth < (50 / m_timeScale))
-        newWidth = 50 / m_timeScale;
+    if (newWidth < qRound(50.0 / double(m_timeScale)))
+        newWidth = qRound(50.0 / double(m_timeScale));
     setWidth(newWidth);
 }
 
@@ -89,7 +91,11 @@ void AudioItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
 
     ShowItem::paint(painter, option, widget);
 
-    if (m_preview != NULL)
+    if (m_audio->hasAnalysis() == true)
+    {
+        paintAnalysisWaveform(painter);
+    }
+    else if (m_preview != NULL)
     {
         // show preview here
         painter->drawPixmap(0, 0, m_preview->scaled(m_width, TRACK_HEIGHT - 4));
@@ -112,7 +118,71 @@ void AudioItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
     ShowItem::postPaint(painter);
 }
 
-void AudioItem::setTimeScale(int val)
+void AudioItem::paintAnalysisWaveform(QPainter *painter)
+{
+    const QByteArray waveform = m_audio->waveform();
+    const quint32 duration = m_audio->totalDuration();
+    if (waveform.isEmpty() || duration == 0 || m_width <= 4)
+        return;
+
+    /* Keep the waveform and its beat markers edge-to-edge with the clip,
+     * so they line up exactly with the timeline grid above. */
+    const QRectF plot(0, 3, m_width, TRACK_HEIGHT - 8);
+    const qreal center = plot.center().y();
+    const qreal halfHeight = plot.height() / 2.0;
+    QColor itemColor = getColor();
+    if (itemColor.isValid() == false)
+        itemColor = ShowFunction::defaultColor(Function::AudioType);
+    /* The item background is painted with the function colour. Using the
+     * same colour for the waveform made it invisible; use a high-contrast
+     * foreground while keeping the item's configured colour. */
+    QColor waveColor = Theme::contrastingText(itemColor);
+    waveColor.setAlpha(220);
+
+    painter->save();
+    painter->setClipRect(plot);
+    painter->setPen(QPen(waveColor, 1.0));
+    for (int x = 0; x < int(plot.width()); ++x)
+    {
+        const int index = qBound(0, int((qint64(x) * waveform.size()) / qMax(1, int(plot.width()))),
+                                 waveform.size() - 1);
+        const qreal amplitude = (uchar(waveform.at(index)) / 255.0) * halfHeight;
+        painter->drawLine(QPointF(plot.left() + x, center - amplitude),
+                          QPointF(plot.left() + x, center + amplitude));
+    }
+
+    const QColor beatColor = Theme::instance()->accent();
+    const QVector<quint32> beats = m_audio->beatPositions();
+    for (int i = 0; i < beats.size(); ++i)
+    {
+        if (beats.at(i) > duration)
+            break;
+        const qreal x = plot.left() + plot.width() * (qreal(beats.at(i)) / duration);
+        QPen pen(beatColor, (i % 4 == 0) ? 2.0 : 1.0);
+        pen.setColor(QColor(beatColor.red(), beatColor.green(), beatColor.blue(),
+                            (i % 4 == 0) ? 210 : 120));
+        painter->setPen(pen);
+        painter->drawLine(QPointF(x, plot.top()), QPointF(x, plot.bottom()));
+    }
+
+    const QVector<quint32> triggers = m_audio->triggerPoints();
+    if (triggers.isEmpty() == false)
+    {
+        const QColor triggerColor = Theme::instance()->color(Theme::Warning);
+        painter->setPen(QPen(triggerColor, 2.0));
+        for (quint32 trigger : triggers)
+        {
+            if (trigger > duration)
+                break;
+            const qreal x = plot.left() + plot.width() * (qreal(trigger) / duration);
+            painter->drawLine(QPointF(x, plot.top()), QPointF(x, plot.top() + 4));
+        }
+    }
+
+    painter->restore();
+}
+
+void AudioItem::setTimeScale(qreal val)
 {
     ShowItem::setTimeScale(val);
     calculateWidth();
@@ -123,6 +193,51 @@ void AudioItem::setDuration(quint32 msec, bool stretch)
     Q_UNUSED(msec)
     Q_UNUSED(stretch)
     // nothing to do
+}
+
+quint32 AudioItem::snapStartTime(quint32 start, quint32 gridStepMs,
+                                 quint32 pointerTime) const
+{
+    if (m_audio == NULL || gridStepMs == 0)
+        return start;
+
+    const QVector<quint32> beats = m_audio->beatPositions();
+    if (beats.isEmpty() == true)
+        return start;
+
+    const quint32 duration = m_audio->totalDuration();
+    const quint32 localPointer = pointerTime > start ? pointerTime - start : 0;
+
+    int nearestBeat = -1;
+    quint32 nearestDistance = UINT_MAX;
+    for (int i = 0; i < beats.size(); ++i)
+    {
+        if (duration > 0 && beats.at(i) > duration)
+            break;
+
+        const quint32 distance = beats.at(i) > localPointer
+                               ? beats.at(i) - localPointer
+                               : localPointer - beats.at(i);
+        if (distance < nearestDistance)
+        {
+            nearestDistance = distance;
+            nearestBeat = i;
+        }
+    }
+
+    if (nearestBeat < 0)
+        return start;
+
+    /* Align the chosen internal beat, rather than the clip edge, to the Show
+     * grid. This keeps pickup intros in phase with the musical timeline. */
+    const quint32 beat = beats.at(nearestBeat);
+    qint64 target = qRound64((qreal(start) + qreal(beat)) / qreal(gridStepMs))
+                    * qint64(gridStepMs);
+    qint64 candidate = target - qint64(beat);
+    if (candidate < 0)
+        candidate += gridStepMs;
+
+    return candidate >= 0 ? quint32(candidate) : start;
 }
 
 QString AudioItem::functionName() const

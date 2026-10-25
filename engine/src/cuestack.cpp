@@ -472,10 +472,12 @@ void CueStack::writeDMX(MasterTimer *timer, QList<Universe*> ua)
         while (it.hasNext() == true)
         {
             it.next();
-            quint32 universe = it.key();
             QSharedPointer<GenericFader> fader = it.value();
             if (!fader.isNull())
-                ua[universe]->dismissFader(fader);
+            {
+                fader->setEnabled(false);
+                fader->requestDelete();
+            }
         }
 
         m_fadersMap.clear();
@@ -546,6 +548,7 @@ void CueStack::postRun(MasterTimer* timer, QList<Universe *> ua)
     qDebug() << Q_FUNC_INFO;
 
     Q_UNUSED(timer);
+    Q_UNUSED(ua);
 
     /* If no fade out is needed, dismiss all the requested faders.
      * Otherwise, set all the faders to fade out and let Universe dismiss them
@@ -556,10 +559,12 @@ void CueStack::postRun(MasterTimer* timer, QList<Universe *> ua)
         while (it.hasNext() == true)
         {
             it.next();
-            quint32 universe = it.key();
             QSharedPointer<GenericFader> fader = it.value();
             if (!fader.isNull())
-                ua[universe]->dismissFader(fader);
+            {
+                fader->setEnabled(false);
+                fader->requestDelete();
+            }
         }
     }
     else

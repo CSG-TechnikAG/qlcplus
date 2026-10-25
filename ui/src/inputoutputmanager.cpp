@@ -22,6 +22,8 @@
 #include <QHeaderView>
 #include <QStringList>
 #include <QVBoxLayout>
+#include <QHBoxLayout>
+#include <QFrame>
 #include <QMessageBox>
 #include <QSettings>
 #include <QSplitter>
@@ -35,8 +37,10 @@
 #include <QIcon>
 
 #include "inputoutputpatcheditor.h"
+#include "songrequestdialog.h"
 #include "universeitemwidget.h"
 #include "inputoutputmanager.h"
+#include "appicons.h"
 #include "inputoutputmap.h"
 #include "outputpatch.h"
 #include "inputpatch.h"
@@ -74,19 +78,28 @@ InputOutputManager::InputOutputManager(QWidget* parent, Doc* doc)
 
     /* Create a new layout for this widget */
     new QVBoxLayout(this);
-    layout()->setContentsMargins(0, 0, 0, 0);
-    layout()->setSpacing(0);
+    layout()->setContentsMargins(12, 8, 12, 10);
+    layout()->setSpacing(10);
+
+    QFrame *actionBar = new QFrame(this);
+    actionBar->setObjectName("pageActionBar");
+    actionBar->setFixedHeight(48);
+    actionBar->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+    QHBoxLayout *barLayout = new QHBoxLayout(actionBar);
+    barLayout->setContentsMargins(6, 4, 6, 4);
+    barLayout->setSpacing(6);
+    layout()->addWidget(actionBar);
 
     m_splitter = new QSplitter(Qt::Horizontal, this);
     layout()->addWidget(m_splitter);
 
-    m_addUniverseAction = new QAction(QIcon(":/edit_add.png"),
+    m_addUniverseAction = new QAction(AppIcons::icon("file-plus", 32),
                                    tr("Add U&niverse"), this);
     m_addUniverseAction->setShortcut(QKeySequence("CTRL+N"));
     connect(m_addUniverseAction, SIGNAL(triggered(bool)),
             this, SLOT(slotAddUniverse()));
 
-    m_deleteUniverseAction = new QAction(QIcon(":/edit_remove.png"),
+    m_deleteUniverseAction = new QAction(AppIcons::icon("trash-2", 32),
                                    tr("&Delete Universe"), this);
     m_deleteUniverseAction->setShortcut(QKeySequence("CTRL+D"));
     connect(m_deleteUniverseAction, SIGNAL(triggered(bool)),
@@ -98,19 +111,31 @@ InputOutputManager::InputOutputManager(QWidget* parent, Doc* doc)
     ucontainer->layout()->setContentsMargins(0, 0, 0, 0);
 
     // Add a toolbar to the dock area
-    m_toolbar = new QToolBar("Input Output Manager", this);
+    m_toolbar = new QToolBar("Input Output Manager", actionBar);
+    m_toolbar->setObjectName("pageToolBar");
     m_toolbar->setFloatable(false);
     m_toolbar->setMovable(false);
-    m_toolbar->setIconSize(QSize(32, 32));
+    m_toolbar->setIconSize(QSize(24, 24));
+    m_toolbar->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     m_toolbar->addAction(m_addUniverseAction);
     m_toolbar->addAction(m_deleteUniverseAction);
+
+    QAction *songRequestAction = new QAction(AppIcons::icon("songrequest", 24),
+                                             tr("SongRequest..."), this);
+    songRequestAction->setToolTip(tr("Configure SongRequest and import songs"));
+    connect(songRequestAction, &QAction::triggered, this, [this]()
+    {
+        SongRequestDialog dialog(m_doc, this);
+        dialog.exec();
+    });
+    m_toolbar->addAction(songRequestAction);
     m_toolbar->addSeparator();
 
     QLabel *uniLabel = new QLabel(tr("Universe name:"));
     m_uniNameEdit = new QLineEdit(this);
     QFont font = QApplication::font();
     //font.setBold(true);
-    font.setPixelSize(18);
+    font.setPixelSize(13);
     uniLabel->setFont(font);
     m_uniNameEdit->setFont(font);
     m_toolbar->addWidget(uniLabel);
@@ -121,7 +146,7 @@ InputOutputManager::InputOutputManager(QWidget* parent, Doc* doc)
     m_uniPassthroughCheck->setFont(font);
     m_toolbar->addWidget(m_uniPassthroughCheck);
 
-    m_splitter->widget(0)->layout()->addWidget(m_toolbar);
+    barLayout->addWidget(m_toolbar);
 
     connect(m_uniNameEdit, SIGNAL(textChanged(QString)),
             this, SLOT(slotUniverseNameChanged(QString)));
@@ -143,7 +168,7 @@ InputOutputManager::InputOutputManager(QWidget* parent, Doc* doc)
             this, SLOT(slotCurrentItemChanged()));
 
     /* Timer that clears the input data icon after a while */
-    m_icon = QIcon(":/input.png");
+    m_icon = AppIcons::icon("inputs-outputs", 32);
     m_timer = new QTimer(this);
     m_timer->setSingleShot(true);
     connect(m_timer, SIGNAL(timeout()), this, SLOT(slotTimerTimeout()));

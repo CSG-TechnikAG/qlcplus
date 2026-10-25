@@ -30,6 +30,7 @@
 #include "vcproperties.h"
 #include "inputpatch.h"
 #include "apputil.h"
+#include "theme.h"
 
 GrandMasterSlider::GrandMasterSlider(QWidget* parent, InputOutputMap *ioMap)
     : QFrame(parent)
@@ -37,10 +38,14 @@ GrandMasterSlider::GrandMasterSlider(QWidget* parent, InputOutputMap *ioMap)
 {
     Q_ASSERT(ioMap != NULL);
 
+    Theme *theme = Theme::instance();
     QString sStyle = AppUtil::getStyleSheet("GRANDMASTER");
     if (sStyle.isEmpty())
-        sStyle = "QFrame { background-color: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #D6D2D0, stop: 1 #AFACAB); "
-                 "border: 1px solid gray; border-radius: 4px; }";
+    {
+        sStyle = QString("QFrame { background-color: %1; border: 1px solid %2; border-radius: 6px; }")
+                 .arg(theme->color(Theme::SurfaceRaised).name())
+                 .arg(theme->color(Theme::Border).name());
+    }
     setStyleSheet(sStyle);
     setSizePolicy(QSizePolicy::Maximum, QSizePolicy::MinimumExpanding);
 
@@ -57,27 +62,23 @@ GrandMasterSlider::GrandMasterSlider(QWidget* parent, InputOutputMap *ioMap)
 
     m_slider = new ClickAndGoSlider(this);
     m_slider->setRange(0, UCHAR_MAX);
-    m_slider->setStyleSheet(
-        "QSlider::groove:vertical { background: transparent; width: 28px; } "
-
-        "QSlider::handle:vertical { "
-        "background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #A81919, stop:0.45 #DB2020, stop:0.50 #000, stop:0.55 #DB2020, stop:1 #A81919);"
-        "border: 1px solid #5c5c5c;"
-        "border-radius: 4px; margin: 0 -1px; height: 20px; }"
-
-        "QSlider::handle:vertical:hover {"
-        "background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #DB2020, stop:0.45 #F51C1C, stop:0.50 #fff, stop:0.55 #F51C1C, stop:1 #DB2020);"
-        "border: 1px solid #000; }"
-
-        "QSlider::add-page:vertical { background: QLinearGradient( x1: 0, y1: 0, x2: 1, y2: 0, stop: 0 #78d, stop: 1 #97CDEC );"
-        "border: 1px solid #5288A7; margin: 0 11px; }"
-
-        "QSlider::sub-page:vertical { background: QLinearGradient( x1: 0, y1: 0, x2: 1, y2: 0, stop: 0 #888, stop: 1 #ddd );"
-        "border: 1px solid #8E8A86; margin: 0 11px; }"
-
-        "QSlider::handle:vertical:disabled { background: QLinearGradient(x1:0, y1:0, x2:0, y2:1, stop:0 #ddd, stop:0.45 #888, stop:0.50 #444, stop:0.55 #888, stop:1 #999);"
-        "border: 1px solid #666; }"
-        );
+    const QColor handleBase = theme->color(Theme::Text);
+    const QString handleColor = QString("rgba(%1, %2, %3, 0.78)")
+                                .arg(handleBase.red()).arg(handleBase.green()).arg(handleBase.blue());
+    m_slider->setStyleSheet(QString(
+        "QSlider::groove:vertical { background: transparent; width: 24px; } "
+        "QSlider::sub-page:vertical { background: %1; border: 1px solid %2; margin: 0 1px; border-radius: 3px; } "
+        "QSlider::add-page:vertical { background: %3; border: none; margin: 0 3px; border-radius: 2px; } "
+        "QSlider::handle:vertical { background: %4; border: 1px solid %2; border-radius: 4px; margin: 0 -1px; height: 20px; } "
+        "QSlider::handle:vertical:hover { background: %3; border-color: %3; } "
+        "QSlider::handle:vertical:disabled { background: %5; border-color: %2; }")
+        .arg(theme->color(Theme::SurfaceHover).name())
+        .arg(theme->color(Theme::BorderStrong).name())
+        .arg(theme->color(Theme::Danger).name())
+        .arg(handleColor)
+        .arg(theme->color(Theme::TextDisabled).name()));
+    if (ClickAndGoSlider *s = qobject_cast<ClickAndGoSlider *>(m_slider))
+        s->setHandleValueLine(true);
     m_slider->setMinimumSize(QSize(30, 50));
     m_slider->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::MinimumExpanding);
     layout()->addWidget(m_slider);
@@ -101,6 +102,7 @@ GrandMasterSlider::GrandMasterSlider(QWidget* parent, InputOutputMap *ioMap)
     /* External input connection */
     connect(m_ioMap, SIGNAL(inputValueChanged(quint32, quint32, uchar)),
             this, SLOT(slotInputValueChanged(quint32, quint32, uchar)));
+    connect(Theme::instance(), &Theme::changed, this, &GrandMasterSlider::refreshTheme);
 
     updateTooltip();
     updateDisplayValue();
@@ -108,6 +110,46 @@ GrandMasterSlider::GrandMasterSlider(QWidget* parent, InputOutputMap *ioMap)
 
 GrandMasterSlider::~GrandMasterSlider()
 {
+}
+
+void GrandMasterSlider::refreshTheme()
+{
+    Theme *theme = Theme::instance();
+    QString sStyle = AppUtil::getStyleSheet("GRANDMASTER");
+    if (sStyle.isEmpty())
+    {
+        sStyle = QString("QFrame { background-color: %1; border: 1px solid %2; border-radius: 6px; }")
+                 .arg(theme->color(Theme::SurfaceRaised).name())
+                 .arg(theme->color(Theme::Border).name());
+    }
+    setStyleSheet(sStyle);
+
+    if (m_slider != NULL)
+    {
+        const QColor track = theme->color(Theme::SurfaceHover);
+        const QColor border = theme->color(Theme::BorderStrong);
+        const QColor fill = theme->color(Theme::Danger);
+        const QColor handle = theme->color(Theme::Text);
+        const QColor disabled = theme->color(Theme::TextDisabled);
+        const QString handleColor = QString("rgba(%1, %2, %3, 0.78)")
+                                    .arg(handle.red()).arg(handle.green()).arg(handle.blue());
+        const bool inverted = m_slider->invertedAppearance();
+        const QString trackPage = QString("background: %1; border: 1px solid %2; margin: 0 1px; border-radius: 3px;")
+                                  .arg(track.name(), border.name());
+        const QString fillPage = QString("background: %1; border: none; margin: 0 3px; border-radius: 2px;")
+                                 .arg(fill.name());
+
+        m_slider->setStyleSheet(QString(
+            "QSlider::groove:vertical { background: transparent; width: 24px; } "
+            "QSlider::sub-page:vertical { %1 } "
+            "QSlider::add-page:vertical { %2 } "
+            "QSlider::handle:vertical { background: %3; border: 1px solid %4; border-radius: 4px; margin: 0 -1px; height: 20px; } "
+            "QSlider::handle:vertical:hover { background: %5; border-color: %5; } "
+            "QSlider::handle:vertical:disabled { background: %6; border-color: %4; }")
+            .arg(inverted ? fillPage : trackPage,
+                 inverted ? trackPage : fillPage,
+                 handleColor, border.name(), fill.name(), disabled.name()));
+    }
 }
 
 bool GrandMasterSlider::invertedAppearance() const
@@ -120,6 +162,7 @@ void GrandMasterSlider::setInvertedAppearance(bool invert)
 {
     Q_ASSERT(m_slider != NULL);
     m_slider->setInvertedAppearance(invert);
+    refreshTheme();
     sendFeedback();
 }
 

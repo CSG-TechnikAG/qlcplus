@@ -32,6 +32,7 @@
 #include "audiocapture.h"
 #include "qlcmacros.h"
 #include "audiobar.h"
+#include "appicons.h"
 
 #define KColumnName             0
 #define KColumnType             1
@@ -113,10 +114,10 @@ void AudioTriggersConfiguration::updateTreeItem(QTreeWidgetItem *item, int idx)
     m_tree->removeItemWidget(item, KColumnDivisor);
 
     QComboBox *combo = new QComboBox();
-    combo->addItem(QIcon(":/uncheck.png"), tr("None"), idx);
-    combo->addItem(QIcon(":/intensity.png"), tr("DMX"), idx);
-    combo->addItem(QIcon(":/function.png"), tr("Function"), idx);
-    combo->addItem(QIcon(":/virtualconsole.png"), tr("VC Widget"), idx);
+    combo->addItem(AppIcons::icon("scene-uncheck", 16), tr("None"), idx);
+    combo->addItem(AppIcons::icon("gauge", 16), tr("DMX"), idx);
+    combo->addItem(AppIcons::icon("functions", 16), tr("Function"), idx);
+    combo->addItem(AppIcons::icon("virtual-console", 16), tr("VC Widget"), idx);
     combo->setCurrentIndex(bar->m_type);
     m_tree->setItemWidget(item, KColumnType, combo);
     connect(combo, SIGNAL(currentIndexChanged(int)),

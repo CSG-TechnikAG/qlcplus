@@ -62,6 +62,8 @@ void Show_Test::copy()
     sf->setFunctionID(scene->id());
     sf->setStartTime(1000);
     sf->setDuration(2000);
+    sf->setStretch(true);
+    sf->setFunctionSpeed(500);
     sf->setLocked(true);
 
     t->addShowFunction(sf);
@@ -74,7 +76,7 @@ void Show_Test::copy()
     showCopy.copyFrom(&show);
 
     QVERIFY(show.timeDivisionType() == Show::BPM_3_4);
-    QVERIFY(show.timeDivisionBPM() == 123);
+    QVERIFY(show.timeDivisionBPM() == 123.0);
     QVERIFY(show.totalDuration() == 3000);
 
     QVERIFY(showCopy.getTracksCount() == show.getTracksCount());
@@ -89,6 +91,8 @@ void Show_Test::copy()
     QVERIFY(copySF->functionID() != scene->id());
     QVERIFY(copySF->startTime() == 1000);
     QVERIFY(copySF->duration() == 2000);
+    QVERIFY(copySF->stretch() == true);
+    QVERIFY(copySF->functionSpeed() == 500);
     QVERIFY(copySF->isLocked() == true);
 
     QVERIFY(show.contains(123) == true);
@@ -102,11 +106,11 @@ void Show_Test::timeDivision()
 {
     Show s(m_doc);
     QCOMPARE(s.timeDivisionType(), Show::Time);
-    QCOMPARE(s.timeDivisionBPM(), 120);
+    QCOMPARE(s.timeDivisionBPM(), 120.0);
 
     s.setTimeDivision(Show::BPM_4_4, 111);
     QCOMPARE(s.timeDivisionType(), Show::BPM_4_4);
-    QCOMPARE(s.timeDivisionBPM(), 111);
+    QCOMPARE(s.timeDivisionBPM(), 111.0);
 
     QCOMPARE(s.beatsDivision(), 4);
     s.setTimeDivisionType(Show::BPM_2_4);
@@ -253,7 +257,7 @@ void Show_Test::load()
     QVERIFY(s.loadXML(xmlReader) == true);
 
     QCOMPARE(s.timeDivisionType(), Show::BPM_2_4);
-    QCOMPARE(s.timeDivisionBPM(), 222);
+    QCOMPARE(s.timeDivisionBPM(), 222.0);
 
     QCOMPARE(s.getTracksCount(), 2);
 

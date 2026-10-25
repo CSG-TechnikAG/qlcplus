@@ -21,6 +21,7 @@
 #define SHOWFUNCTION_H
 
 #include <QColor>
+#include <QPointer>
 
 #include "function.h"
 
@@ -49,7 +50,7 @@ class ShowFunction final : public QObject
 
 public:
     ShowFunction(quint32 id, QObject *parent = 0);
-    virtual ~ShowFunction() {}
+    virtual ~ShowFunction();
 
     /** Get the ShowFunction unique identifier in a Show */
     quint32 id() const;
@@ -67,6 +68,27 @@ public:
     void setDuration(quint32 duration);
     quint32 duration() const;
     quint32 duration(const Doc *doc) const;
+
+    /** Get/Set whether the source Function should be stretched to the
+     *  item duration when this clip is played. */
+    void setStretch(bool stretch);
+    bool stretch() const;
+
+    /** Get/Set a per-clip Function speed override in milliseconds.
+     *  A value of 0 means the source Function speed is used. */
+    void setFunctionSpeed(quint32 speed);
+    quint32 functionSpeed() const;
+
+    /** Prepare the private Function instance used to play this clip with its
+     *  per-clip overrides. Must be called from the UI/document thread. */
+    bool prepareRuntimeFunction(Doc *doc, bool force = false);
+
+    /** Get the prepared per-clip Function, or NULL when the source can be used */
+    Function *runtimeFunction() const;
+
+    /** Mark the prepared runtime Function as stale. It is kept alive so a
+     *  running Show never loses the object it is currently playing. */
+    void invalidateRuntimeFunction();
 
     /** Get/Set the color of the item when rendered in the Show Manager */
     void setColor(QColor color);
@@ -87,6 +109,8 @@ signals:
     void functionIDChanged();
     void startTimeChanged();
     void durationChanged();
+    void stretchChanged();
+    void functionSpeedChanged();
     void colorChanged();
     void lockedChanged();
 
@@ -102,6 +126,16 @@ private:
 
     /** Duration of the Function in milliseconds */
     quint32 m_duration;
+
+    /** Stretch the source Function to m_duration during playback */
+    bool m_stretch;
+
+    /** Per-clip Function speed override in milliseconds (0 = source) */
+    quint32 m_functionSpeed;
+
+    /** Private Function instance for per-clip playback overrides */
+    QPointer<Function> m_runtimeFunction;
+    bool m_runtimeDirty;
 
     /** Background color to be used when displaying the Function in
      *  the Show Manager */

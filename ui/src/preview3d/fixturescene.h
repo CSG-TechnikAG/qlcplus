@@ -43,6 +43,9 @@ enum class FixtureModel
     Bar,        ///< LED bar (housing + lens grid, one beam per column)
     Derby,      ///< spinning effect / derby (dome + radiating beams)
     MovingHead, ///< pan/tilt head (base + yoke + drum)
+    Scanner,    ///< mirror scanner (base + mirror + reflected beam)
+    Strobe,     ///< strobe / blinder (housing + linear flash tube)
+    Laser,      ///< laser projector (housing + aperture + narrow beams)
     Smoke       ///< fog / haze machine (chassis + nozzle + fluid tank)
 };
 

@@ -40,6 +40,8 @@
  * @{
  */
 
+class QGraphicsProxyWidget;
+
 class MultiTrackView final : public QGraphicsView
 {
     Q_OBJECT
@@ -103,6 +105,12 @@ private:
 
     void setItemCommonProperties(ShowItem *item, ShowFunction *func, int trackNum);
 
+    /** Duration of the current header grid step in milliseconds */
+    quint32 resizeGridStep() const;
+
+    /** Apply the current snap grid to all item resize handles */
+    void updateItemsResizeGrid();
+
     /*********************************************************************
      * Header
      *********************************************************************/
@@ -115,7 +123,7 @@ public:
 
     /** When BPM is selected, this function can set a precise
      *  value of time division */
-    void setBPMValue(int value);
+    void setBPMValue(double value);
 
     void setSnapToGrid(bool enable);
 
@@ -132,15 +140,19 @@ public:
     /** Get time in milliseconds of the current cursor position */
     quint32 getTimeFromCursor() const;
 
-    /** Return position in pixel of a given time (in msec) */
-    quint32 getPositionFromTime(quint32 time) const;
+    /** Return position in pixels of a given time (in msec) */
+    qreal getPositionFromTime(quint32 time) const;
 
     /** Return the time (in msec) from a given X position */
     quint32 getTimeFromPosition(qreal pos) const;
 
+    /** Return the duration in milliseconds of one header grid division */
+    quint32 getTimeGridStep() const;
+
 private:
     QGraphicsScene *m_scene;
     QSlider *m_timeSlider;
+    QGraphicsProxyWidget *m_timeSliderProxy;
     ShowHeaderItem *m_header;
     ShowCursorItem *m_cursor;
     QGraphicsItem * m_vdivider;
@@ -161,12 +173,16 @@ protected slots:
     void slotTrackSoloFlagChanged(TrackItem*, bool);
     void slotTrackMuteFlagChanged(TrackItem*, bool);
     void slotViewScrolled(int);
+    void updateFixedItems();
 
     void slotItemMoved(QGraphicsSceneMouseEvent *event, ShowItem *item);
     void slotAlignToCursor(ShowItem *item);
 
 signals:
     void showItemMoved(ShowItem *item, quint32 time, bool moved);
+    void showItemResized(ShowItem *item);
+    void showItemTimingsRequested(ShowItem *item);
+    void showItemDuplicateRequested(ShowItem *item);
     void viewClicked(QMouseEvent * e);
     void timeChanged(quint32 msec);
     void trackClicked(Track *track);

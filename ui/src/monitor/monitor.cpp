@@ -46,6 +46,7 @@
 #include "monitorlayout.h"
 #include "universe.h"
 #include "monitor.h"
+#include "appicons.h"
 #include "apputil.h"
 #include "doc.h"
 
@@ -353,7 +354,7 @@ void Monitor::createAndShow(QWidget* parent, Doc* doc)
 
         /* Set some common properties for the window and show it */
         window->setAttribute(Qt::WA_DeleteOnClose);
-        window->setWindowIcon(QIcon(":/monitor.png"));
+        window->setWindowIcon(AppIcons::icon("monitor", 24));
         window->setWindowTitle(tr("Fixture Monitor"));
         window->setContextMenuPolicy(Qt::CustomContextMenu);
 
@@ -402,7 +403,7 @@ void Monitor::initDMXToolbar()
             this, SLOT(slotSwitchMode()));
 
     /* Font */
-    m_DMXToolBar->addAction(QIcon(":/fonts.png"), tr("Font"),
+    m_DMXToolBar->addAction(AppIcons::icon("type", 24), tr("Font"),
                        this, SLOT(slotChooseFont()));
 
     m_DMXToolBar->addSeparator();
@@ -488,7 +489,7 @@ void Monitor::initDMXToolbar()
 
         action = m_DMXToolBar->addAction(tr("Close"));
         action->setToolTip(tr("Close this window"));
-        action->setIcon(QIcon(":/delete.png"));
+        action->setIcon(AppIcons::icon("trash-2", 16));
         connect(action, SIGNAL(triggered(bool)),
                 this, SLOT(close()));
         m_DMXToolBar->addAction(action);
@@ -607,17 +608,17 @@ void Monitor::initGraphicsToolbar()
 
     m_graphicsToolBar->addSeparator();
 
-    m_graphicsToolBar->addAction(QIcon(":/edit_add.png"), tr("Add fixture"),
+    m_graphicsToolBar->addAction(AppIcons::icon("fixtures", 24), tr("Add fixture"),
                        this, SLOT(slotAddFixture()));
-    m_graphicsToolBar->addAction(QIcon(":/edit_remove.png"), tr("Remove fixture"),
+    m_graphicsToolBar->addAction(AppIcons::icon("trash-2", 24), tr("Remove fixture"),
                        this, SLOT(slotRemoveFixture()));
 
     m_graphicsToolBar->addSeparator();
 
-    m_graphicsToolBar->addAction(QIcon(":/image.png"), tr("Set a background picture"),
+    m_graphicsToolBar->addAction(AppIcons::icon("image", 24), tr("Set a background picture"),
                        this, SLOT(slotSetBackground()));
 
-    m_labelsAction = m_graphicsToolBar->addAction(QIcon(":/label.png"), tr("Show/hide labels"));
+    m_labelsAction = m_graphicsToolBar->addAction(AppIcons::icon("vc-label", 24), tr("Show/hide labels"));
     m_labelsAction->setCheckable(true);
     m_labelsAction->setChecked(m_props->labelsVisible());
     connect(m_labelsAction, SIGNAL(triggered(bool)), this, SLOT(slotShowLabels(bool)));
@@ -630,7 +631,7 @@ void Monitor::initGraphicsToolbar()
 
         action = m_graphicsToolBar->addAction(tr("Close"));
         action->setToolTip(tr("Close this window"));
-        action->setIcon(QIcon(":/delete.png"));
+        action->setIcon(AppIcons::icon("trash-2", 16));
         connect(action, SIGNAL(triggered(bool)),
                 this, SLOT(close()));
         m_graphicsToolBar->addAction(action);

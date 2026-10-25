@@ -179,6 +179,9 @@ public:
      */
     void setSliderMode(SliderMode mode);
 
+    /** Re-apply theme-dependent slider styling after a theme change */
+    void refreshTheme();
+
 protected:
     SliderMode m_sliderMode;
 

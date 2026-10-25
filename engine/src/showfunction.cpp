@@ -28,8 +28,17 @@
 #define KXMLShowFunctionID QStringLiteral("ID")
 #define KXMLShowFunctionStartTime QStringLiteral("StartTime")
 #define KXMLShowFunctionDuration QStringLiteral("Duration")
+#define KXMLShowFunctionStretch QStringLiteral("Stretch")
+#define KXMLShowFunctionSpeed QStringLiteral("Speed")
 #define KXMLShowFunctionColor QStringLiteral("Color")
 #define KXMLShowFunctionLocked QStringLiteral("Locked")
+
+ShowFunction::~ShowFunction()
+{
+    Function *runtime = m_runtimeFunction.data();
+    m_runtimeFunction = NULL;
+    delete runtime;
+}
 
 ShowFunction::ShowFunction(quint32 id, QObject *parent)
     : QObject(parent)
@@ -37,6 +46,10 @@ ShowFunction::ShowFunction(quint32 id, QObject *parent)
     , m_functionId(Function::invalidId())
     , m_startTime(UINT_MAX)
     , m_duration(0)
+    , m_stretch(false)
+    , m_functionSpeed(0)
+    , m_runtimeFunction(NULL)
+    , m_runtimeDirty(true)
     , m_color(QColor())
     , m_locked(false)
     , m_intensityOverrideId(-1)
@@ -54,6 +67,7 @@ void ShowFunction::setFunctionID(quint32 id)
         return;
 
     m_functionId = id;
+    invalidateRuntimeFunction();
     emit functionIDChanged();
 }
 
@@ -82,6 +96,7 @@ void ShowFunction::setDuration(quint32 duration)
         return;
 
     m_duration = duration;
+    invalidateRuntimeFunction();
     emit durationChanged();
 }
 
@@ -103,6 +118,123 @@ quint32 ShowFunction::duration(const Doc *doc) const
         return 0;
 
     return f->totalDuration();
+}
+
+void ShowFunction::setStretch(bool stretch)
+{
+    if (stretch == m_stretch)
+        return;
+
+    m_stretch = stretch;
+    invalidateRuntimeFunction();
+    emit stretchChanged();
+}
+
+bool ShowFunction::stretch() const
+{
+    return m_stretch;
+}
+
+void ShowFunction::setFunctionSpeed(quint32 speed)
+{
+    if (speed == m_functionSpeed)
+        return;
+
+    m_functionSpeed = speed;
+    invalidateRuntimeFunction();
+    emit functionSpeedChanged();
+}
+
+quint32 ShowFunction::functionSpeed() const
+{
+    return m_functionSpeed;
+}
+
+void ShowFunction::invalidateRuntimeFunction()
+{
+    m_runtimeDirty = true;
+}
+
+Function *ShowFunction::runtimeFunction() const
+{
+    return m_runtimeFunction.data();
+}
+
+static quint32 nextRuntimeFunctionId(const Doc *doc)
+{
+    static quint32 runtimeId = 0xC0000000;
+    while (doc->function(runtimeId) != NULL)
+        ++runtimeId;
+    return runtimeId++;
+}
+
+bool ShowFunction::prepareRuntimeFunction(Doc *doc, bool force)
+{
+    if (doc == NULL)
+        return false;
+
+    if (force == false && m_runtimeDirty == false && m_runtimeFunction.isNull() == false)
+        return true;
+
+    Function *oldRuntime = m_runtimeFunction.data();
+    m_runtimeFunction = NULL;
+    delete oldRuntime;
+    m_runtimeDirty = false;
+
+    Function *source = doc->function(m_functionId);
+    if (source == NULL)
+    {
+        m_runtimeDirty = true;
+        return false;
+    }
+
+    const quint32 clipDuration = duration(doc);
+    const Function::Type type = source->type();
+    bool needsCopy = false;
+
+    if (type == Function::SequenceType || type == Function::ChaserType)
+    {
+        needsCopy = (clipDuration > 0 && clipDuration != source->totalDuration());
+    }
+    else if (type == Function::RGBMatrixType || type == Function::EFXType)
+    {
+        needsCopy = (m_functionSpeed > 0 || (m_stretch == true && clipDuration > 0));
+    }
+
+    if (needsCopy == false)
+        return true;
+
+    Function *copy = source->createCopy(doc, false);
+    if (copy == NULL)
+    {
+        m_runtimeDirty = true;
+        return false;
+    }
+
+    copy->setID(nextRuntimeFunctionId(doc));
+
+    if (type == Function::SequenceType || type == Function::ChaserType)
+    {
+        if (clipDuration > 0)
+            copy->setTotalDuration(clipDuration);
+    }
+    else if (type == Function::RGBMatrixType)
+    {
+        if (m_functionSpeed > 0)
+            copy->setDuration(m_functionSpeed);
+        else if (clipDuration > 0)
+            copy->setTotalDuration(clipDuration);
+    }
+    else if (type == Function::EFXType)
+    {
+        if (m_functionSpeed > 0)
+            copy->setDuration(m_functionSpeed);
+        else if (clipDuration > 0)
+            copy->setDuration(clipDuration);
+    }
+
+    m_runtimeFunction = copy;
+    return true;
 }
 
 void ShowFunction::setColor(QColor color)
@@ -176,6 +308,10 @@ bool ShowFunction::loadXML(QXmlStreamReader &root)
         setStartTime(attrs.value(KXMLShowFunctionStartTime).toString().toUInt());
     if (attrs.hasAttribute(KXMLShowFunctionDuration))
         setDuration(attrs.value(KXMLShowFunctionDuration).toString().toUInt());
+    if (attrs.hasAttribute(KXMLShowFunctionStretch))
+        setStretch(attrs.value(KXMLShowFunctionStretch).toString().toUInt());
+    if (attrs.hasAttribute(KXMLShowFunctionSpeed))
+        setFunctionSpeed(attrs.value(KXMLShowFunctionSpeed).toString().toUInt());
     if (attrs.hasAttribute(KXMLShowFunctionColor))
         setColor(QColor(attrs.value(KXMLShowFunctionColor).toString()));
     if (attrs.hasAttribute(KXMLShowFunctionLocked))
@@ -203,6 +339,10 @@ bool ShowFunction::saveXML(QXmlStreamWriter *doc, quint32 trackId) const
     doc->writeAttribute(KXMLShowFunctionStartTime, QString::number(startTime()));
     if (m_duration)
         doc->writeAttribute(KXMLShowFunctionDuration, QString::number(m_duration));
+    if (m_stretch)
+        doc->writeAttribute(KXMLShowFunctionStretch, QString::number(m_stretch));
+    if (m_functionSpeed)
+        doc->writeAttribute(KXMLShowFunctionSpeed, QString::number(m_functionSpeed));
     if (color().isValid())
         doc->writeAttribute(KXMLShowFunctionColor, color().name());
     if (isLocked())

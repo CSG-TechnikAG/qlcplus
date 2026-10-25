@@ -31,9 +31,24 @@ add_library(${module_name}
     addrgbpanel.cpp addrgbpanel.h addrgbpanel.ui
     app.cpp app.h
     apputil.cpp apputil.h
+    appicons.cpp appicons.h
+    theme.cpp theme.h
+    mainshell.cpp mainshell.h
+    components/appcard.cpp components/appcard.h
+    components/appdialog.cpp components/appdialog.h
+    components/appemptystate.cpp components/appemptystate.h
+    components/appsettingrow.cpp components/appsettingrow.h
+    components/appswitch.cpp components/appswitch.h
+    components/appsegmentedcontrol.cpp components/appsegmentedcontrol.h
+    components/appearancedialog.cpp components/appearancedialog.h
+    uieffects.cpp uieffects.h
+    uistyleproxy.cpp uistyleproxy.h
     assignhotkey.cpp assignhotkey.h assignhotkey.ui
     audiobar.cpp audiobar.h
     audioeditor.cpp audioeditor.h audioeditor.ui
+    audioanalyzer.cpp audioanalyzer.h
+    songrequestclient.cpp songrequestclient.h
+    songrequestdialog.cpp songrequestdialog.h
     audiotriggerwidget.cpp audiotriggerwidget.h
     channelmodifiereditor.cpp channelmodifiereditor.h channelmodifiereditor.ui
     channelmodifiergraphicsview.cpp channelmodifiergraphicsview.h
@@ -168,6 +183,7 @@ target_include_directories(${module_name} PUBLIC
     ../../engine/src
     ../../plugins/interfaces
     ../../webaccess
+    components
     monitor
     showmanager
     stagegeometry
@@ -180,19 +196,21 @@ target_include_directories(${module_name} PUBLIC ${FFTW3_INCLUDE_DIRS})
 target_link_libraries(${module_name} PUBLIC
     Qt${QT_MAJOR_VERSION}::Core
     Qt${QT_MAJOR_VERSION}::Gui
+    Qt${QT_MAJOR_VERSION}::Network
     Qt${QT_MAJOR_VERSION}::Multimedia
     Qt${QT_MAJOR_VERSION}::MultimediaWidgets
     Qt${QT_MAJOR_VERSION}::Widgets
+    Qt${QT_MAJOR_VERSION}::Svg
     qlcplusengine
 )
 
 # Add resources and RGB Script deps
 if(QT_VERSION_MAJOR GREATER 5)
     target_link_libraries(${module_name} PUBLIC Qt${QT_MAJOR_VERSION}::Qml)
-    qt_add_resources(qlcplusui_resource_files "qlcui.qrc")
+    qt_add_resources(qlcplusui_resource_files "qlcui.qrc" "icons/icons.qrc")
 else()
     target_link_libraries(${module_name} PUBLIC Qt${QT_MAJOR_VERSION}::Script)
-    qt5_add_resources(qlcplusui_resource_files "qlcui.qrc")
+    qt5_add_resources(qlcplusui_resource_files "qlcui.qrc" "icons/icons.qrc")
 endif()
 
 target_sources(${module_name} PRIVATE ${qlcplusui_resource_files})

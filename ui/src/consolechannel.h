@@ -33,6 +33,7 @@ class QContextMenuEvent;
 class QIntValidator;
 class QToolButton;
 class QSpinBox;
+class QLineEdit;
 class QLabel;
 class QMenu;
 
@@ -128,6 +129,9 @@ public:
     void showResetButton(bool show);
     bool hasResetButton() const;
 
+private:
+    void updateEditorStyle();
+
 private slots:
     void slotResetButtonClicked();
 
@@ -139,6 +143,7 @@ private:
     QToolButton* m_presetButton;
     ClickAndGoWidget *m_cngWidget;
     QSpinBox* m_spin;
+    QLineEdit* m_valueEdit;
     ClickAndGoSlider* m_slider;
     QLabel* m_label;
     QToolButton* m_resetButton;

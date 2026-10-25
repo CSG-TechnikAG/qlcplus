@@ -15,6 +15,7 @@
 #include <QPolygonF>
 #include <QLineF>
 #include <QLinearGradient>
+#include <QVarLengthArray>
 #include <QRadialGradient>
 #include <QMouseEvent>
 #include <QWheelEvent>
@@ -68,6 +69,27 @@ QList<QVector3D> clipNear(const QList<QVector3D> &poly, double near)
     return out;
 }
 
+void clipNearVar(const QVarLengthArray<QVector3D, 32> &poly,
+                 QVarLengthArray<QVector3D, 32> &out, double near)
+{
+    out.clear();
+    const int n = poly.size();
+    for (int i = 0; i < n; ++i)
+    {
+        const QVector3D &a = poly.at(i);
+        const QVector3D &b = poly.at((i + 1) % n);
+        const bool aIn = a.z() >= near;
+        const bool bIn = b.z() >= near;
+        if (aIn)
+            out.append(a);
+        if (aIn != bIn)
+        {
+            const double t = (near - a.z()) / (b.z() - a.z());
+            out.append(a + (b - a) * t);
+        }
+    }
+}
+
 /** Clip a camera-space segment against z >= near. Returns false if invisible. */
 bool clipLine(QVector3D &a, QVector3D &b, double near)
 {
@@ -85,6 +107,20 @@ bool clipLine(QVector3D &a, QVector3D &b, double near)
             a = c;
     }
     return true;
+}
+
+/** Simple diffuse shading for the preview's fixed studio light. */
+QColor shadedColor(const QColor &base, const QVector3D &normal,
+                   double ambient = 0.76, double diffuse = 0.38)
+{
+    static const QVector3D light =
+        QVector3D(-0.35, -0.45, 0.82).normalized();
+    const double ndl = qMax(0.0, double(QVector3D::dotProduct(normal.normalized(), light)));
+    const double f = ambient + diffuse * ndl;
+    return QColor(qBound(0, qRound(base.red() * f), 255),
+                  qBound(0, qRound(base.green() * f), 255),
+                  qBound(0, qRound(base.blue() * f), 255),
+                  base.alpha());
 }
 
 double pointSegmentDist(const QPointF &p, const QPointF &a, const QPointF &b)
@@ -126,6 +162,7 @@ Preview3DView::Preview3DView(QWidget *parent)
     , m_fixtureInteractive(false)
     , m_selectedFixture(-1)
     , m_dragFixture(false)
+    , m_occludersDirty(true)
     , m_fpsFrames(0)
     , m_fps(0.0)
     , m_lastFrameMs(0.0)
@@ -241,8 +278,12 @@ void Preview3DView::setTrussScene(TrussScene *scene)
     if (m_scene != NULL)
         disconnect(m_scene, nullptr, this, nullptr);
     m_scene = scene;
+    m_occludersDirty = true;
     if (m_scene != NULL)
-        connect(m_scene, &TrussScene::changed, this, [this]() { update(); });
+        connect(m_scene, &TrussScene::changed, this, [this]() {
+            m_occludersDirty = true;
+            update();
+        });
     update();
 }
 
@@ -524,20 +565,22 @@ bool Preview3DView::projectDepth(const QVector3D &world, QPointF &screen, double
 void Preview3DView::rasterPolygon(SoftwareRaster &r, const QList<QVector3D> &world,
                                   const QColor &fill, const QColor &edge, double edgeWidth) const
 {
-    QList<QVector3D> cam;
+    QVarLengthArray<QVector3D, 32> cam;
     cam.reserve(world.size());
     for (const QVector3D &w : world)
-        cam << toCamera(w);
-    cam = clipNear(cam, m_near);
-    if (cam.size() < 3)
+        cam.append(toCamera(w));
+
+    QVarLengthArray<QVector3D, 32> clipped;
+    clipNearVar(cam, clipped, m_near);
+    if (clipped.size() < 3)
         return;
 
-    QList<QPointF> pts;
-    QList<double> iws;
-    for (const QVector3D &c : cam)
+    QVarLengthArray<QPointF, 32> pts;
+    QVarLengthArray<double, 32> iws;
+    for (const QVector3D &c : clipped)
     {
-        pts << projectCamera(c);
-        iws << 1.0 / c.z();
+        pts.append(projectCamera(c));
+        iws.append(1.0 / c.z());
     }
 
     // Convex polygons -> triangle fan.
@@ -665,7 +708,7 @@ void Preview3DView::rasterStage(SoftwareRaster &r) const
                     QVector3D(b.x(), b.y(), m_zFloor),
                     QVector3D(a.x(), a.y(), m_zFloor)
                 };
-                rasterPolygon(r, side, m_legColor, m_legEdge, 0.8);
+                rasterPolygon(r, side, shadedColor(m_legColor, outward), m_legEdge, 0.8);
             }
         }
     }
@@ -766,7 +809,7 @@ void Preview3DView::rasterBox(SoftwareRaster &r, const QVector3D &center, const 
         const QList<QVector3D> poly = {
             c[faces[f][0]], c[faces[f][1]], c[faces[f][2]], c[faces[f][3]]
         };
-        rasterPolygon(r, poly, fill, edge, 1.0);
+        rasterPolygon(r, poly, shadedColor(fill, n), edge, 1.0);
     }
 }
 
@@ -815,14 +858,15 @@ void Preview3DView::rasterCylinder(SoftwareRaster &r, const QVector3D &center, c
         const QVector3D n = (mid - center).normalized();
         if (QVector3D::dotProduct(n, m_eye - mid) <= 0.0)
             continue;
-        rasterPolygon(r, { ring0.at(i), ring0.at(j), ring1.at(j), ring1.at(i) }, fill, edge, 1.0);
+        rasterPolygon(r, { ring0.at(i), ring0.at(j), ring1.at(j), ring1.at(i) },
+                      shadedColor(fill, n), edge, 1.0);
     }
 
     // Caps.
     if (QVector3D::dotProduct(axis, m_eye - (center + axis * half)) > 0.0)
-        rasterPolygon(r, ring1, fill.lighter(112), edge, 1.0);
+        rasterPolygon(r, ring1, shadedColor(fill.lighter(112), axis, 0.82, 0.3), edge, 1.0);
     if (QVector3D::dotProduct(-axis, m_eye - (center - axis * half)) > 0.0)
-        rasterPolygon(r, ring0, fill.darker(118), edge, 1.0);
+        rasterPolygon(r, ring0, shadedColor(fill.darker(118), -axis, 0.82, 0.3), edge, 1.0);
 }
 
 void Preview3DView::rasterDome(SoftwareRaster &r, const QVector3D &base, const QQuaternion &rot,
@@ -849,9 +893,12 @@ void Preview3DView::rasterDome(SoftwareRaster &r, const QVector3D &base, const Q
         for (int i = 0; i < segs; ++i)
         {
             const int k = (i + 1) % segs;
+            const QVector3D mid = (lat.at(j).at(i) + lat.at(j).at(k) +
+                                   lat.at(j + 1).at(k) + lat.at(j + 1).at(i)) * 0.25f;
+            const QVector3D n = (mid - base).normalized();
             rasterPolygon(r, { lat.at(j).at(i), lat.at(j).at(k),
                                lat.at(j + 1).at(k), lat.at(j + 1).at(i) },
-                          fill, edge, 1.0);
+                          shadedColor(fill, n), edge, 1.0);
         }
     }
 }
@@ -1127,6 +1174,31 @@ void Preview3DView::rasterBarnDoors(SoftwareRaster &r, const QVector3D &center,
     door(QVector3D(R, 0, R),   QVector3D(R, 0, -R),  QVector3D(s, c, 0));  // right
 }
 
+void Preview3DView::invalidateOccluders()
+{
+    m_occludersDirty = true;
+}
+
+void Preview3DView::rebuildOccluders() const
+{
+    if (m_occludersDirty == false)
+        return;
+
+    m_occluders.clear();
+    if (m_scene != NULL)
+    {
+        for (const Truss &t : m_scene->trusses())
+        {
+            if (!t.visible)
+                continue;
+            const QList<TrussSegment> segs = t.segments(m_scene->linkedPorts(t.id), true);
+            for (const TrussSegment &s : segs)
+                m_occluders << Occluder{ s.a, s.b, s.chord ? 0.030 : 0.018 };
+        }
+    }
+    m_occludersDirty = false;
+}
+
 void Preview3DView::rasterFixtures(SoftwareRaster &r) const
 {
     if (m_fixtureScene == NULL)
@@ -1322,6 +1394,78 @@ void Preview3DView::rasterFixtures(SoftwareRaster &r) const
                        bodyR * 0.62, lens, shellEdge.darker(120));
             break;
         }
+        case FixtureModel::Scanner:
+        {
+            const double sx = fi.size.x();
+            const double sy = fi.size.y();
+            const double sz = fi.size.z();
+
+            double mhYaw, mhPitch;
+            if (live && fi.liveDirValid)
+            {
+                const QVector3D d = fi.liveDir.normalized();
+                mhPitch = qRadiansToDegrees(qAsin(qBound(-1.0, double(d.z()), 1.0)));
+                mhYaw = qRadiansToDegrees(qAtan2(-double(d.x()), double(d.y())));
+            }
+            else
+            {
+                mhYaw = live ? fi.yaw + fi.livePan : fi.yaw;
+                mhPitch = live ? fi.pitch + fi.liveTilt : fi.pitch;
+            }
+            const QQuaternion pan = QQuaternion::fromAxisAndAngle(QVector3D(0.0, 0.0, 1.0), mhYaw);
+            const QQuaternion head = pan * QQuaternion::fromAxisAndAngle(QVector3D(1.0, 0.0, 0.0), mhPitch);
+
+            // Low base and a compact mirror head on top.
+            rasterBox(r, fi.pos + rot.rotatedVector(QVector3D(0.0, 0.0, -sz * 0.22)),
+                      rot, QVector3D(sx, sy, sz * 0.55), shell, shellEdge);
+            for (double side : { -1.0, 1.0 })
+            {
+                rasterBox(r, fi.pos + pan.rotatedVector(QVector3D(side * sx * 0.32, 0.0, sz * 0.12)),
+                          pan, QVector3D(0.025, sy * 0.55, sz * 0.45),
+                          metal, metal.darker(130));
+            }
+            rasterBox(r, fi.pos + QVector3D(0.0, 0.0, sz * 0.24), head,
+                      QVector3D(sx * 0.62, sy * 0.58, sz * 0.42), shell, shellEdge);
+            const QVector3D mirror = fi.pos + QVector3D(0.0, 0.0, sz * 0.24)
+                                   + head.rotatedVector(QVector3D(0.0, sy * 0.3, 0.0));
+            rasterDisk(r, mirror + head.rotatedVector(QVector3D(0.0, 0.008, 0.0)),
+                       head, qMin(sx, sy) * 0.18, lens, shellEdge.darker(120));
+            break;
+        }
+        case FixtureModel::Strobe:
+        {
+            const double sx = fi.size.x();
+            const double sy = fi.size.y();
+            const double sz = fi.size.z();
+
+            rasterBox(r, fi.pos, rot, QVector3D(sx, sy, sz), shell, shellEdge);
+
+            // Recessed reflector and a linear xenon tube.
+            rasterBox(r, fi.pos + rot.rotatedVector(QVector3D(0.0, sy * 0.5 + 0.004, 0.0)),
+                      rot, QVector3D(sx * 0.88, 0.008, sz * 0.62),
+                      shell.darker(155), shellEdge.darker(140));
+            const QQuaternion tubeRot = rot
+                * QQuaternion::fromAxisAndAngle(QVector3D(0.0, 0.0, 1.0), -90.0);
+            rasterCylinder(r, fi.pos + rot.rotatedVector(QVector3D(0.0, sy * 0.5 + 0.018, 0.0)),
+                           tubeRot, qMax(0.006, sz * 0.055), sx * 0.76, lens,
+                           shellEdge.darker(120), 12);
+            break;
+        }
+        case FixtureModel::Laser:
+        {
+            const double sx = fi.size.x();
+            const double sy = fi.size.y();
+            const double sz = fi.size.z();
+
+            rasterBox(r, fi.pos, rot, QVector3D(sx, sy, sz), shell, shellEdge);
+            // Front aperture and a small status LED.
+            rasterDisk(r, fi.pos + rot.rotatedVector(QVector3D(0.0, sy * 0.5 + 0.006, 0.0)),
+                       rot, qMin(sx, sz) * 0.18, lens, shellEdge.darker(120));
+            rasterDisk(r, fi.pos + rot.rotatedVector(QVector3D(sx * 0.28, sy * 0.5 + 0.006, -sz * 0.2)),
+                       rot, qMin(sx, sz) * 0.035, QColor(120, 230, 140),
+                       shellEdge.darker(140));
+            break;
+        }
         case FixtureModel::Smoke:
         {
             const double sx = fi.size.x();
@@ -1397,19 +1541,8 @@ void Preview3DView::rasterFixtures(SoftwareRaster &r) const
     const bool liveMode = m_fixtureScene->isLive();
     const bool showBeams = liveMode || m_beamPreview;
 
-    // Truss occluders (beam shadows), rebuilt each frame.
-    m_occluders.clear();
-    if (m_scene != NULL)
-    {
-        for (const Truss &t : m_scene->trusses())
-        {
-            if (!t.visible)
-                continue;
-            const QList<TrussSegment> segs = t.segments(m_scene->linkedPorts(t.id), true);
-            for (const TrussSegment &s : segs)
-                m_occluders << Occluder{ s.a, s.b, s.chord ? 0.030 : 0.018 };
-        }
-    }
+    // Truss occluders (beam shadows) are static between truss edits.
+    rebuildOccluders();
 
     r.setAdditive(true);
     r.setDepthWrite(false);
@@ -1517,6 +1650,68 @@ void Preview3DView::rasterFixtures(SoftwareRaster &r) const
             const QVector3D front = fi.pos + head.rotatedVector(QVector3D(0.0, bodyR + 0.012, 0.0));
             rasterFixtureBeam(r, front, head, fi.beamDeg, gel, 0.0,
                               qBound(0, int(80.0 * inten), 90));
+            break;
+        }
+        case FixtureModel::Scanner:
+        {
+            const double sy = fi.size.y();
+            const double sz = fi.size.z();
+            double mhYaw, mhPitch;
+            if (live && fi.liveDirValid)
+            {
+                const QVector3D d = fi.liveDir.normalized();
+                mhPitch = qRadiansToDegrees(qAsin(qBound(-1.0, double(d.z()), 1.0)));
+                mhYaw = qRadiansToDegrees(qAtan2(-double(d.x()), double(d.y())));
+            }
+            else
+            {
+                mhYaw = live ? fi.yaw + fi.livePan : fi.yaw;
+                mhPitch = live ? fi.pitch + fi.liveTilt : fi.pitch;
+            }
+            const QQuaternion pan = QQuaternion::fromAxisAndAngle(QVector3D(0.0, 0.0, 1.0), mhYaw);
+            const QQuaternion head = pan * QQuaternion::fromAxisAndAngle(QVector3D(1.0, 0.0, 0.0), mhPitch);
+            const QVector3D front = fi.pos + QVector3D(0.0, 0.0, sz * 0.24)
+                                  + head.rotatedVector(QVector3D(0.0, sy * 0.32, 0.0));
+            rasterFixtureBeam(r, front, head, fi.beamDeg, gel, 0.0,
+                              qBound(0, int(75.0 * inten), 88));
+            break;
+        }
+        case FixtureModel::Strobe:
+        {
+            const double sx = fi.size.x();
+            const double sy = fi.size.y();
+            const double sz = fi.size.z();
+            const QVector3D dir = rot.rotatedVector(QVector3D(0.0, 1.0, 0.0));
+            const QVector3D origin = fi.pos + rot.rotatedVector(QVector3D(0.0, sy * 0.5 + 0.01, 0.0));
+            const double blen = beamLength(origin, dir);
+            const double spread = qTan(qDegreesToRadians(qBound(24.0, fi.beamDeg, 90.0) * 0.5)) * blen;
+            const int a = qBound(0, int(60.0 * inten), 75);
+            if (a > 0)
+                rasterRectBeam(r, origin, rot, sx * 0.42, sz * 0.3, blen, spread, gel, a);
+            break;
+        }
+        case FixtureModel::Laser:
+        {
+            const double sy = fi.size.y();
+            const QVector3D origin = fi.pos + rot.rotatedVector(QVector3D(0.0, sy * 0.5 + 0.012, 0.0));
+            const int rays = 5;
+            static const QColor laserPalette[] = {
+                QColor(80, 255, 140), QColor(255, 70, 210), QColor(80, 190, 255),
+                QColor(255, 230, 90), QColor(255, 255, 255)
+            };
+            for (int i = 0; i < rays; ++i)
+            {
+                const double angle = (i - (rays - 1) * 0.5) * 4.5;
+                const QQuaternion rayRot = rot
+                    * QQuaternion::fromAxisAndAngle(QVector3D(0.0, 0.0, 1.0), angle);
+                QColor rayColor = gel;
+                if (live && fi.liveHeads.isEmpty() == false)
+                    rayColor = fi.liveHeads.at(i % fi.liveHeads.size());
+                else if (!live)
+                    rayColor = laserPalette[i % 5];
+                rasterFixtureBeam(r, origin, rayRot, 2.8, rayColor, 0.0,
+                                  qBound(0, int(65.0 * inten), 80));
+            }
             break;
         }
         case FixtureModel::Dimmer:
@@ -1719,11 +1914,19 @@ void Preview3DView::renderScene(QPainter &p)
 
     p.drawImage(0, 0, m_raster.finish());
 
-    // Soft vignette for depth.
-    QRadialGradient vig(rect().center(), qMax(width(), height()) * 0.75);
-    vig.setColorAt(0.55, QColor(0, 0, 0, 0));
-    vig.setColorAt(1.0, QColor(0, 0, 0, 90));
-    p.fillRect(rect(), vig);
+    // Soft vignette for depth. It only depends on the widget size, so build
+    // it once instead of recalculating a full-screen radial gradient per frame.
+    if (m_vignette.size() != size())
+    {
+        m_vignette = QImage(size(), QImage::Format_ARGB32_Premultiplied);
+        m_vignette.fill(Qt::transparent);
+        QPainter vp(&m_vignette);
+        QRadialGradient vig(rect().center(), qMax(width(), height()) * 0.75);
+        vig.setColorAt(0.55, QColor(0, 0, 0, 0));
+        vig.setColorAt(1.0, QColor(0, 0, 0, 90));
+        vp.fillRect(rect(), vig);
+    }
+    p.drawImage(0, 0, m_vignette);
 
     m_lastFrameMs = m_frameTimer.elapsed();
 

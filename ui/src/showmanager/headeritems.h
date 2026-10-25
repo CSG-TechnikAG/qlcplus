@@ -51,12 +51,12 @@ public:
     QRectF boundingRect() const override;
     void paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget) override;
 
-    void setTimeScale(int val);
-    int getTimeScale() const;
+    void setTimeScale(qreal val);
+    qreal getTimeScale() const;
 
     void setTimeDivisionType(Show::TimeDivision type);
     Show::TimeDivision getTimeDivisionType() const;
-    void setBPMValue(int value);
+    void setBPMValue(double value);
 
     int getHalfSecondWidth() const;
     float getTimeDivisionStep() const;
@@ -71,6 +71,9 @@ protected:
     void mousePressEvent(QGraphicsSceneMouseEvent *event) override;
 
 private:
+    /** Recompute the pixel distance of the current time division */
+    void updateTimeStep();
+
     /** Total width of the item */
     int m_width;
     /** Total height of the item */
@@ -80,9 +83,9 @@ private:
     /** Divisor of the time division hit bar (the highest bar) */
     char m_timeHit;
     /** Scale of the time division */
-    int m_timeScale;
+    qreal m_timeScale;
     /** When BPM mode is active, this holds the number of BPM to display */
-    int m_BPMValue;
+    double m_BPMValue;
     /** The type of time division */
     Show::TimeDivision m_type;
 };

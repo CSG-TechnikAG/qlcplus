@@ -41,6 +41,8 @@
 #include "mastertimer.h"
 #include "chaserstep.h"
 #include "vccuelist.h"
+#include "theme.h"
+#include "appicons.h"
 #include "qlcmacros.h"
 #include "function.h"
 #include "vcwidget.h"
@@ -69,20 +71,26 @@ const quint8 VCCueList::sideFaderInputSourceId = 3;
 const quint8 VCCueList::stopInputSourceId = 4;
 
 const QString progressDisabledStyle =
-        "QProgressBar { border: 2px solid #C3C3C3; border-radius: 4px; background-color: #DCDCDC; }";
+        "QProgressBar { border: 1px solid palette(mid); border-radius: 4px; "
+        "background-color: palette(button); }";
 const QString progressFadeStyle =
-        "QProgressBar { border: 2px solid grey; border-radius: 4px; background-color: #C3C3C3; text-align: center; }"
-        "QProgressBar::chunk { background-color: #63C10B; width: 1px; }";
+        "QProgressBar { border: 1px solid palette(mid); border-radius: 4px; "
+        "background-color: palette(button); text-align: center; }"
+        "QProgressBar::chunk { background-color: #3DD68C; width: 1px; border-radius: 3px; }";
 const QString progressHoldStyle =
-        "QProgressBar { border: 2px solid grey; border-radius: 4px; background-color: #C3C3C3; text-align: center; }"
-        "QProgressBar::chunk { background-color: #0F9BEC; width: 1px; }";
+        "QProgressBar { border: 1px solid palette(mid); border-radius: 4px; "
+        "background-color: palette(button); text-align: center; }"
+        "QProgressBar::chunk { background-color: palette(highlight); width: 1px; border-radius: 3px; }";
 
 const QString cfLabelBlueStyle =
-        "QLabel { background-color: #4E8DDE; color: white; border: 1px solid; border-radius: 3px; font: bold; }";
+        "QLabel { background-color: palette(highlight); color: palette(highlighted-text); "
+        "border: 1px solid palette(mid); border-radius: 4px; font-weight: bold; }";
 const QString cfLabelOrangeStyle =
-        "QLabel { background-color: orange; color: black; border: 1px solid; border-radius: 3px; font: bold; }";
+        "QLabel { background-color: #FFB020; color: #0A0A0C; "
+        "border: 1px solid palette(mid); border-radius: 4px; font-weight: bold; }";
 const QString cfLabelNoStyle =
-        "QLabel { border: 1px solid; border-radius: 3px; font: bold; }";
+        "QLabel { background-color: palette(button); color: palette(button-text); "
+        "border: 1px solid palette(mid); border-radius: 4px; font-weight: bold; }";
 
 VCCueList::VCCueList(QWidget *parent, Doc *doc) : VCWidget(parent, doc)
     , m_chaserID(Function::invalidId())
@@ -119,10 +127,15 @@ VCCueList::VCCueList(QWidget *parent, Doc *doc) : VCWidget(parent, doc)
     grid->addWidget(m_topStepLabel, 2, 0, 1, 1);
 
     m_sideFader = new ClickAndGoSlider();
-    m_sideFader->setSliderStyleSheet(CNG_DEFAULT_STYLE);
+    m_sideFader->setSliderStyleSheet(cngDefaultStyle());
     m_sideFader->setFixedWidth(32);
     m_sideFader->setRange(0, 100);
     m_sideFader->setValue(100);
+    connect(Theme::instance(), &Theme::changed, this, [this]()
+    {
+        if (m_sideFader != NULL)
+            m_sideFader->setSliderStyleSheet(cngDefaultStyle());
+    });
     grid->addWidget(m_sideFader, 3, 0, 1, 1);
 
     m_bottomStepLabel = new QLabel("");
@@ -195,7 +208,7 @@ VCCueList::VCCueList(QWidget *parent, Doc *doc) : VCWidget(parent, doc)
     hbox->setSpacing(2);
 
     m_crossfadeButton = new QToolButton(this);
-    m_crossfadeButton->setIcon(QIcon(":/slider.png"));
+    m_crossfadeButton->setIcon(AppIcons::icon("virtual-console", 24));
     m_crossfadeButton->setIconSize(QSize(24, 24));
     m_crossfadeButton->setCheckable(true);
     m_crossfadeButton->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
@@ -207,7 +220,7 @@ VCCueList::VCCueList(QWidget *parent, Doc *doc) : VCWidget(parent, doc)
     hbox->addWidget(m_crossfadeButton);
 
     m_playbackButton = new QToolButton(this);
-    m_playbackButton->setIcon(QIcon(":/player_play.png"));
+    m_playbackButton->setIcon(AppIcons::icon("play", 24));
     m_playbackButton->setIconSize(QSize(24, 24));
     m_playbackButton->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     m_playbackButton->setFixedHeight(32);
@@ -216,7 +229,7 @@ VCCueList::VCCueList(QWidget *parent, Doc *doc) : VCWidget(parent, doc)
     hbox->addWidget(m_playbackButton);
 
     m_stopButton = new QToolButton(this);
-    m_stopButton->setIcon(QIcon(":/player_stop.png"));
+    m_stopButton->setIcon(AppIcons::icon("square", 24));
     m_stopButton->setIconSize(QSize(24, 24));
     m_stopButton->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     m_stopButton->setFixedHeight(32);
@@ -225,7 +238,7 @@ VCCueList::VCCueList(QWidget *parent, Doc *doc) : VCWidget(parent, doc)
     hbox->addWidget(m_stopButton);
 
     m_previousButton = new QToolButton(this);
-    m_previousButton->setIcon(QIcon(":/back.png"));
+    m_previousButton->setIcon(AppIcons::icon("chevron-left", 24));
     m_previousButton->setIconSize(QSize(24, 24));
     m_previousButton->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     m_previousButton->setFixedHeight(32);
@@ -234,7 +247,7 @@ VCCueList::VCCueList(QWidget *parent, Doc *doc) : VCWidget(parent, doc)
     hbox->addWidget(m_previousButton);
 
     m_nextButton = new QToolButton(this);
-    m_nextButton->setIcon(QIcon(":/forward.png"));
+    m_nextButton->setIcon(AppIcons::icon("chevron-right", 24));
     m_nextButton->setIconSize(QSize(24, 24));
     m_nextButton->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     m_nextButton->setFixedHeight(32);
@@ -630,12 +643,12 @@ void VCCueList::slotPlayback()
             {
                 m_playbackButton->setStyleSheet(QString("QToolButton{ background: %1; }")
                                                 .arg(m_stopButton->palette().window().color().name()));
-                m_playbackButton->setIcon(QIcon(":/player_pause.png"));
+                m_playbackButton->setIcon(AppIcons::icon("pause", 24));
             }
             else
             {
                 m_playbackButton->setStyleSheet("QToolButton{ background: #5B81FF; }");
-                m_playbackButton->setIcon(QIcon(":/player_play.png"));
+                m_playbackButton->setIcon(AppIcons::icon("play", 24));
             }
 
             // check if the item selection has been changed during pause
@@ -690,7 +703,7 @@ void VCCueList::slotStop()
             {
                 m_stopButton->setStyleSheet(QString("QToolButton{ background: %1; }")
                                                 .arg(m_playbackButton->palette().window().color().name()));
-                m_stopButton->setIcon(QIcon(":/player_pause.png"));
+                m_stopButton->setIcon(AppIcons::icon("pause", 24));
             }
             else
             {
@@ -913,9 +926,9 @@ void VCCueList::slotFunctionRunning(quint32 fid)
         return;
 
     if (playbackLayout() == PlayPauseStop)
-        m_playbackButton->setIcon(QIcon(":/player_pause.png"));
+        m_playbackButton->setIcon(AppIcons::icon("pause", 24));
     else if (playbackLayout() == PlayStopPause)
-        m_playbackButton->setIcon(QIcon(":/player_stop.png"));
+        m_playbackButton->setIcon(AppIcons::icon("square", 24));
     m_timer->start(PROGRESS_INTERVAL);
     emit playbackStatusChanged();
     updateFeedback();
@@ -927,7 +940,7 @@ void VCCueList::slotFunctionStopped(quint32 fid)
         return;
 
     resetIntensityOverrideAttribute();
-    m_playbackButton->setIcon(QIcon(":/player_play.png"));
+    m_playbackButton->setIcon(AppIcons::icon("play", 24));
     m_topStepLabel->setText("");
     m_topStepLabel->setStyleSheet(cfLabelNoStyle);
     m_bottomStepLabel->setText("");
@@ -1082,13 +1095,13 @@ void VCCueList::setPlaybackLayout(VCCueList::PlaybackLayout layout)
 
     if (layout == PlayStopPause)
     {
-        m_stopButton->setIcon(QIcon(":/player_pause.png"));
+        m_stopButton->setIcon(AppIcons::icon("pause", 24));
         m_playbackButton->setToolTip(tr("Play/Stop Cue list"));
         m_stopButton->setToolTip(tr("Pause Cue list"));
     }
     else if (layout == PlayPauseStop)
     {
-        m_stopButton->setIcon(QIcon(":/player_stop.png"));
+        m_stopButton->setIcon(AppIcons::icon("square", 24));
         m_playbackButton->setToolTip(tr("Play/Pause Cue list"));
         m_stopButton->setToolTip(tr("Stop Cue list"));
     }

@@ -24,6 +24,7 @@
 #include <QMainWindow>
 #include <QString>
 #include <QList>
+#include <QHash>
 #include <QFile>
 
 #include "dmxdumpfactoryproperties.h"
@@ -36,8 +37,11 @@ class QMessageBox;
 class QToolButton;
 class QFileDialog;
 class QTabWidget;
+class MainShell;
+class QActionGroup;
 class WebAccess;
 class QToolBar;
+class QTimer;
 class QPixmap;
 class QAction;
 class QLabel;
@@ -96,6 +100,7 @@ protected:
 #endif
 
 private:
+    MainShell* m_shell;
     QTabWidget* m_tab;
     QDir m_workingDirectory;
     bool m_overscan;
@@ -152,6 +157,9 @@ public slots:
 private:
     void initActions();
     void initToolBar();
+    void updateSongRequestStatus();
+    void updateAudioBpm();
+    void openSongRequestDialog();
     bool handleFileError(QFile::FileError error);
     bool saveModifiedDoc(const QString & title, const QString & message);
 
@@ -181,6 +189,24 @@ public slots:
 
     void slotRecentFileClicked(QAction *recent);
 
+    void slotThemeActionTriggered(QAction *action);
+    void slotAccentActionTriggered(QAction *action);
+    void slotCustomAccent();
+    void slotAnimationsToggled(bool enabled);
+    void slotOpenStyleSheetFolder();
+    void slotReloadStyleSheet();
+    void slotThemeChanged();
+    void slotAppearanceSettings();
+    void slotNavigationPositionTriggered(QAction *action);
+
+private:
+    void initAppearanceMenu();
+    void updateAppearanceChecks();
+    void setActionIcon(QAction *action, const QString &iconName, int size = 20);
+    void updateActionIcons();
+    void updateModeIcon();
+    void updateBlackoutIcon();
+
 private:
     QAction* m_fileNewAction;
     QAction* m_fileOpenAction;
@@ -196,12 +222,24 @@ private:
     QAction* m_dumpDmxAction;
     QAction* m_liveEditAction;
     QAction* m_liveEditVirtualConsoleAction;
+    QAction* m_songRequestAction;
+    QTimer* m_audioBpmTimer;
 
     QAction* m_helpIndexAction;
     QAction* m_helpAboutAction;
     QAction* m_quitAction;
     QMenu* m_fileOpenMenu;
     QMenu* m_fadeAndStopMenu;
+
+    QHash<QAction*, QString> m_actionIcons;
+
+    QMenu* m_appearanceMenu;
+    QAction* m_appearanceAction;
+    QActionGroup* m_themeGroup;
+    QActionGroup* m_accentGroup;
+    QActionGroup* m_navGroup;
+    QAction* m_customAccentAction;
+    QAction* m_animationsAction;
 
 private:
     QToolBar* m_toolbar;
@@ -237,6 +275,7 @@ public:
      * Update the recent file drop down menu
      */
     void updateFileOpenMenu(QString addRecent);
+    void updateMenuButtonPopup(QAction *action);
 
     /**
      * Load workspace contents from a file with the given name.

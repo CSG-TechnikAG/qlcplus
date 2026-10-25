@@ -2,7 +2,7 @@
   Q Light Controller Plus
   timingstool.h
 
-  Copyright (C) Massimo Callegari
+  Copyright (c) Massimo Callegari
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -24,8 +24,12 @@
 #include <QGroupBox>
 #include <QWidget>
 
+class QComboBox;
+class QLabel;
+class QToolButton;
 class SpeedDial;
 class ShowItem;
+class Function;
 
 class TimingsTool final : public QWidget
 {
@@ -37,6 +41,21 @@ public:
     void showDurationControls(bool show);
     void showDurationOptions(bool show);
 
+    /**
+     * Enable the musical duration editor for a Show tempo.
+     *
+     * @param bpm The Show tempo in beats per minute
+     * @param beatsPerBar The number of beats in a bar (2, 3 or 4)
+     */
+    void setBpmContext(double bpm, int beatsPerBar);
+
+    /**
+     * Enable the BPM step/loop speed editor for tempo-based functions.
+     *
+     * @param function The Function represented by the Show item
+     */
+    void setFunctionContext(Function *function);
+
 signals:
     void startTimeChanged(ShowItem *item, int msec);
     void durationChanged(ShowItem *item, int msec, bool stretch);
@@ -44,6 +63,23 @@ signals:
 protected slots:
     void slotStartTimeChanged(int msec);
     void slotDurationChanged(int msec);
+    void slotBpmDivisionChanged(int index);
+    void slotBpmApply();
+    void slotBpmShorten();
+    void slotBpmExtend();
+    void slotStepDivisionChanged(int index);
+    void slotStepApply();
+
+private:
+    void populateBpmDivisions();
+    void updateBpmControls(bool initial);
+    void updateStepControls(bool initial);
+    void applyBpmDuration(quint32 msec);
+    int defaultBpmDivision(quint32 duration) const;
+    quint32 divisionDuration(int divisionIndex) const;
+    quint32 divisionDuration(QComboBox *combo, int divisionIndex) const;
+    quint32 stepDuration() const;
+    QString musicalLength(quint32 msec) const;
 
 private:
     SpeedDial* m_startDial;
@@ -54,6 +90,24 @@ private:
     QRadioButton *m_stretchOriginalRadio;
     QRadioButton *m_expandLoopRadio;
 
+    QGroupBox *m_bpmGroup;
+    QComboBox *m_bpmDivisionCombo;
+    QToolButton *m_bpmApplyButton;
+    QToolButton *m_bpmShortenButton;
+    QToolButton *m_bpmExtendButton;
+    QLabel *m_bpmLengthLabel;
+
+    QGroupBox *m_stepGroup;
+    QComboBox *m_stepDivisionCombo;
+    QToolButton *m_stepApplyButton;
+    QLabel *m_stepLengthLabel;
+    Function *m_function;
+    bool m_stepAvailable;
+
+    double m_bpm;
+    int m_beatsPerBar;
+    bool m_bpmAvailable;
+    bool m_updatingBpm;
 };
 
 #endif // TIMINGSTOOL_H

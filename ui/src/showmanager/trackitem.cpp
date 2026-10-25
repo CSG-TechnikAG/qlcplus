@@ -24,6 +24,8 @@
 #include <QMenu>
 
 #include "trackitem.h"
+#include "theme.h"
+#include "appicons.h"
 
 TrackItem::TrackItem(Track *track, int number)
     : m_number(number)
@@ -52,18 +54,18 @@ TrackItem::TrackItem(Track *track, int number)
     m_soloRegion = new QRectF(17.0, 10.0, 25.0, 16.0);
     m_muteRegion = new QRectF(45.0, 10.0, 25.0, 16.0);
 
-    m_moveUp = new QAction(QIcon(":/up.png"), tr("Move up"), this);
+    m_moveUp = new QAction(AppIcons::icon("arrow-up", 16), tr("Move up"), this);
     connect(m_moveUp, SIGNAL(triggered()),
             this, SLOT(slotMoveUpClicked()));
-    m_moveDown = new QAction(QIcon(":/down.png"), tr("Move down"), this);
+    m_moveDown = new QAction(AppIcons::icon("arrow-down", 16), tr("Move down"), this);
     connect(m_moveDown, SIGNAL(triggered()),
             this, SLOT(slotMoveDownClicked()));
 
-    m_changeName = new QAction(QIcon(":/editclear.png"), tr("Change name"), this);
+    m_changeName = new QAction(AppIcons::icon("pencil-line", 16), tr("Change name"), this);
     connect(m_changeName, SIGNAL(triggered()),
             this, SLOT(slotChangeNameClicked()));
 
-    m_delete = new QAction(QIcon(":/editdelete.png"), tr("Delete"), this);
+    m_delete = new QAction(AppIcons::icon("trash-2", 16), tr("Delete"), this);
     connect(m_delete, SIGNAL(triggered()),
             this, SLOT(slotDeleteTrackClicked()));
 }
@@ -155,50 +157,62 @@ void TrackItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
     Q_UNUSED(option);
     Q_UNUSED(widget);
 
-    // draw background gradient
+    Theme *theme = Theme::instance();
+    const QColor border = theme->color(Theme::Border);
+    const QColor text = theme->color(Theme::Text);
+    const QColor dim = theme->color(Theme::TextDisabled);
+    const QColor surface = theme->color(Theme::SurfaceRaised);
+    const QColor hover = theme->color(Theme::SurfaceHover);
+
+    /* Track header surface */
     QLinearGradient linearGrad(QPointF(0, 0), QPointF(0, TRACK_HEIGHT));
-    linearGrad.setColorAt(0, QColor(50, 64, 75, 255));
-    //linearGrad.setColorAt(1, QColor(99, 127, 148, 255));
-    linearGrad.setColorAt(1, QColor(76, 98, 115, 255));
+    linearGrad.setColorAt(0, surface);
+    linearGrad.setColorAt(1, hover);
+    painter->setPen(QPen(border, 1));
     painter->setBrush(linearGrad);
-    painter->drawRect(0, 0, TRACK_WIDTH - 4, TRACK_HEIGHT - 1);
+    painter->drawRoundedRect(QRectF(0.5, 0.5, TRACK_WIDTH - 5, TRACK_HEIGHT - 2),
+                             4, 4);
 
-    // Draw left bar that shows if the track is active or not
-    painter->setPen(QPen(QColor(48, 61, 72, 255), 1));
-    if (m_isActive == true)
-        painter->setBrush(QBrush(QColor(0, 255, 0, 255)));
-    else
-        painter->setBrush(QBrush(QColor(129, 145, 160, 255)));
-    painter->drawRoundedRect(1, 1, 10, 40, 2, 2);
+    /* Active track indicator */
+    painter->setPen(Qt::NoPen);
+    painter->setBrush(m_isActive ? theme->color(Theme::Success) : dim);
+    painter->drawRoundedRect(3, 3, 8, 36, 3, 3);
 
-    // draw solo button
-    if (m_isSolo)
-        painter->setBrush(QBrush(QColor(255, 255, 0, 255)));
-    else
-        painter->setBrush(QBrush(QColor(129, 145, 160, 255)));
-    painter->drawRoundedRect(m_soloRegion->toRect(), 3.0, 3.0);
-    painter->setFont(m_btnFont);
-    painter->drawText(25, 23, "S");
+    QFont buttonFont = m_btnFont;
+    painter->setFont(buttonFont);
 
-    // draw mute button
-    if (m_isMute)
-        painter->setBrush(QBrush(QColor(255, 0, 0, 255)));
-    else
-        painter->setBrush(QBrush(QColor(129, 145, 160, 255)));
-    painter->drawRoundedRect(m_muteRegion->toRect(), 3.0, 3.0);
-    painter->drawText(51, 23, "M");
+    /* Solo */
+    const QColor soloColor = m_isSolo ? theme->color(Theme::Warning) : hover;
+    painter->setPen(QPen(border, 1));
+    painter->setBrush(soloColor);
+    painter->drawRoundedRect(m_soloRegion->toRect(), 3, 3);
+    painter->setPen(Theme::contrastingText(soloColor));
+    painter->drawText(m_soloRegion->toRect(), Qt::AlignCenter, "S");
 
-    // draw bound Scene indicator
+    /* Mute */
+    const QColor muteColor = m_isMute ? theme->color(Theme::Danger) : hover;
+    painter->setPen(QPen(border, 1));
+    painter->setBrush(muteColor);
+    painter->drawRoundedRect(m_muteRegion->toRect(), 3, 3);
+    painter->setPen(Theme::contrastingText(muteColor));
+    painter->drawText(m_muteRegion->toRect(), Qt::AlignCenter, "M");
+
+    /* Bound Scene indicator */
     if (m_track->getSceneID() != Function::invalidId())
-        painter->drawPixmap(TRACK_WIDTH - 33, 5, 24, 24, QIcon(":/scene.png").pixmap(24, 24));
+    {
+        painter->drawPixmap(TRACK_WIDTH - 33, 5, 24, 24,
+                            AppIcons::pixmap("scene", 24,
+                                             AppIcons::palette(AppIcons::Scene, AppIcons::Normal),
+                                             painter->device()->devicePixelRatioF()));
+    }
 
     painter->setFont(m_font);
-    // draw shadow
-    painter->setPen(QPen(QColor(10, 10, 10, 150), 2));
-    painter->drawText(QRect(5, 47, TRACK_WIDTH - 7, 28), Qt::AlignLeft | Qt::TextWordWrap | Qt::AlignBottom, m_name);
-    // draw track name
-    painter->setPen(QPen(QColor(200, 200, 200, 255), 2));
-    painter->drawText(QRect(4, 47, TRACK_WIDTH - 7, 28), Qt::AlignLeft | Qt::TextWordWrap | Qt::AlignBottom, m_name);
+    painter->setPen(QPen(theme->color(Theme::Background), 2));
+    painter->drawText(QRect(5, 47, TRACK_WIDTH - 7, 28),
+                      Qt::AlignLeft | Qt::TextWordWrap | Qt::AlignBottom, m_name);
+    painter->setPen(QPen(text, 1));
+    painter->drawText(QRect(4, 47, TRACK_WIDTH - 7, 28),
+                      Qt::AlignLeft | Qt::TextWordWrap | Qt::AlignBottom, m_name);
 }
 
 void TrackItem::slotTrackChanged(quint32 id)

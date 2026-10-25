@@ -32,6 +32,7 @@
 #include "vcspeeddial.h"
 #include "flowlayout.h"
 #include "speeddial.h"
+#include "appicons.h"
 #include "qlcmacros.h"
 #include "function.h"
 #include "qlcfile.h"
@@ -47,12 +48,13 @@ const quint8 VCSpeedDial::applyInputSourceId = 5;
 const QSize VCSpeedDial::defaultSize(QSize(200, 175));
 
 static const QString presetBtnSS =
-    "QPushButton { background-color: %1; height: 32px; border: 2px solid #6A6A6A; border-radius: 5px; }"
-    "QPushButton:pressed { border: 2px solid #0000FF; }"
-    "QPushButton:disabled { border: 2px solid #BBBBBB; color: #8f8f8f }";
+    "QPushButton { background-color: %1; height: 32px; border: 1px solid palette(mid); "
+    "border-radius: 6px; }"
+    "QPushButton:pressed { border-color: palette(highlight); }"
+    "QPushButton:disabled { border-color: palette(mid); color: palette(mid); }";
 
 static const QString dialSS =
-    "QGroupBox { background-color: %1; border: 1px solid gray; border-radius: 5px; margin-top: 0; font-size: %2pt; }"
+    "QGroupBox { background-color: %1; border: 1px solid palette(mid); border-radius: 6px; margin-top: 0; font-size: %2pt; }"
     "QGroupBox::title { subcontrol-origin: margin; subcontrol-position: top left; padding: 0px 5px;"
     "                   background-color: transparent; color: %3; }";
 
@@ -133,7 +135,7 @@ VCSpeedDial::VCSpeedDial(QWidget* parent, Doc* doc)
 
     m_multDivResetButton = new QToolButton();
     m_multDivResetButton->setIconSize(QSize(32, 32));
-    m_multDivResetButton->setIcon(QIcon(":/fileclose.png"));
+    m_multDivResetButton->setIcon(AppIcons::icon("refresh-cw", 16));
     m_multDivResetButton->setToolTip(tr("Reset the current factor to 1x"));
     connect(m_multDivResetButton, SIGNAL(clicked()),
             this, SLOT(slotMultDivReset()));

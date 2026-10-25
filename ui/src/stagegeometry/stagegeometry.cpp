@@ -20,6 +20,7 @@
 #include "qlcchannel.h"
 #include "fixture.h"
 #include "doc.h"
+#include "theme.h"
 
 #include <QTabWidget>
 #include <QVBoxLayout>
@@ -181,8 +182,6 @@ void StageGeometry::aimAt(const QList<quint32> &ids, double x, double y, double 
             continue;
         setDeskValue(f->panAddress(), pair.first);
         setDeskValue(f->tiltAddress(), pair.second);
-        if (f->dimmerAddress() >= 0)
-            setDeskValue(f->dimmerAddress(), 255);
     }
     syncSliderValues();
 }
@@ -199,8 +198,6 @@ void StageGeometry::clearAim(const QList<quint32> &ids)
             continue;
         desk->resetChannel(uint(f->panAddress()));
         desk->resetChannel(uint(f->tiltAddress()));
-        if (f->dimmerAddress() >= 0)
-            desk->resetChannel(uint(f->dimmerAddress()));
     }
     syncSliderValues();
 }
@@ -315,13 +312,14 @@ void StageGeometry::clearContents()
 void StageGeometry::initUi()
 {
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(4, 4, 4, 4);
-    mainLayout->setSpacing(4);
+    mainLayout->setContentsMargins(12, 8, 12, 10);
+    mainLayout->setSpacing(10);
 
     initTopBar();
 
     m_tabs = new QTabWidget(this);
     m_tabs->setTabPosition(QTabWidget::North);
+    m_tabs->setDocumentMode(true);
     initCalibrationTab();
     initUsageTab();
     initLiveTab();
@@ -331,9 +329,12 @@ void StageGeometry::initUi()
 void StageGeometry::initTopBar()
 {
     QFrame *frame = new QFrame(this);
-    frame->setFrameShape(QFrame::StyledPanel);
+    frame->setObjectName("pageActionBar");
+    frame->setFixedHeight(48);
+    frame->setFrameShape(QFrame::NoFrame);
     QHBoxLayout *bar = new QHBoxLayout(frame);
-    bar->setContentsMargins(4, 2, 4, 2);
+    bar->setContentsMargins(6, 4, 6, 4);
+    bar->setSpacing(6);
 
     bar->addWidget(new QLabel(tr("Lamp:"), frame));
     m_fixtureCombo = new QComboBox(frame);
@@ -349,7 +350,8 @@ void StageGeometry::initTopBar()
 
     bar->addStretch();
     m_statusLabel = new QLabel(frame);
-    m_statusLabel->setStyleSheet("color:#0a7");
+    m_statusLabel->setStyleSheet(QString("color:%1").arg(
+                Theme::instance()->color(Theme::Success).name()));
     bar->addWidget(m_statusLabel);
 
     if (layout() != NULL)
@@ -1355,8 +1357,6 @@ void StageGeometry::applyTarget(bool silent)
             continue;
         setDeskValue(f->panAddress(), pair.first);
         setDeskValue(f->tiltAddress(), pair.second);
-        if (f->dimmerAddress() >= 0)
-            setDeskValue(f->dimmerAddress(), 255);
         applied++;
     }
     if (!silent)
@@ -1429,8 +1429,6 @@ void StageGeometry::liveTick()
         {
             setDeskValue(f->panAddress(), pair.first);
             setDeskValue(f->tiltAddress(), pair.second);
-            if (f->dimmerAddress() >= 0)
-                setDeskValue(f->dimmerAddress(), 255);
             lines << tr("%1: Pan %2  Tilt %3").arg(f->name).arg(pair.first).arg(pair.second);
         }
         else

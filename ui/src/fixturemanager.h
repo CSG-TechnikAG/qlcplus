@@ -37,6 +37,9 @@ class OutputMap;
 class QSplitter;
 class QAction;
 class QMenu;
+class AppEmptyState;
+class AppSegmentedControl;
+class QToolBar;
 
 /** @addtogroup ui_fixtures
  * @{
@@ -127,6 +130,14 @@ private:
     /** Create the text browser for displaying information */
     void createInfo();
 
+    /** Show/hide the modern empty state over the info browser */
+    void showEmptyState(const QString &title, const QString &description,
+                        const QString &iconName, const QString &actionText);
+    void hideEmptyState();
+
+protected:
+    bool eventFilter(QObject *watched, QEvent *event) override;
+
 private slots:
     /** Callback for fixture list selection changes */
     void slotSelectionChanged();
@@ -174,11 +185,15 @@ private:
 
 private:
     QSplitter* m_splitter;
+    QTabWidget* m_viewTabs;
+    AppSegmentedControl* m_viewSwitch;
+    QToolBar* m_toolbar;
     FixtureTreeWidget* m_fixtures_tree;
     QTreeWidget* m_channel_groups_tree;
     QWidget* m_rdmManager;
 
     QTextBrowser* m_info;
+    AppEmptyState* m_emptyState;
     FixtureGroupEditor* m_groupEditor;
     int m_currentTabIndex;
 

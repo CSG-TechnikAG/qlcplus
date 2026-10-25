@@ -32,6 +32,8 @@ class ShowFunction;
  * @{
  */
 
+class QGraphicsSceneHoverEvent;
+
 /**
  * @brief The ShowItem class is the base class for the Show Manager
  * items rendered in the multitrack view.
@@ -76,16 +78,16 @@ public:
     /**
      * @brief setTimeScale sets the item time scale as selected in the Show Manager
      *
-     * @param val the timescale value (range from 1 to 10)
+     * @param val pixels-per-second scale factor
      */
-    virtual void setTimeScale(int val);
+    virtual void setTimeScale(qreal val);
 
     /**
      * @brief getTimeScale get the item time scale
      *
      * @return the item time scale value
      */
-    virtual int getTimeScale() const;
+    virtual qreal getTimeScale() const;
 
     /**
      * @brief setStartTime virtual method to set the item start time.
@@ -118,6 +120,20 @@ public:
     virtual quint32 getDuration() const;
 
     /**
+     * @brief snapStartTime adjusts a snapped start time to an item-specific
+     *        musical anchor. Audio items use their detected beats so a clip
+     *        that begins with a pickup still aligns its beat markers to the
+     *        Show grid.
+     *
+     * @param start the grid-snapped start time in milliseconds
+     * @param gridStepMs the current Show grid step in milliseconds
+     * @param pointerTime the timeline time under the mouse cursor
+     * @return the preferred start time
+     */
+    virtual quint32 snapStartTime(quint32 start, quint32 gridStepMs,
+                                  quint32 pointerTime) const;
+
+    /**
      * @brief setWidth set the item width for rendering
      *
      * @param w the item width in pixels
@@ -137,6 +153,18 @@ public:
      * @return the dragging position as float point
      */
     virtual QPointF getDraggingPos() const;
+
+    /**
+     * @brief isDurationAdjustable tells whether this item can be resized
+     *        by dragging its right edge.
+     */
+    virtual bool isDurationAdjustable() const;
+
+    /**
+     * @brief setResizeGridStep sets the duration step used while resizing.
+     *        A value of 0 disables snapping.
+     */
+    void setResizeGridStep(quint32 msec);
 
     /**
      * @brief setTrackIndex set the multitrack track index of the item
@@ -242,6 +270,16 @@ protected slots:
      */
     void slotLockItemClicked();
 
+    /**
+     * @brief slotTimingsClicked opens the item timing editor
+     */
+    void slotTimingsClicked();
+
+    /**
+     * @brief slotDuplicateClicked duplicates the clip on its track
+     */
+    void slotDuplicateClicked();
+
 signals:
     /**
      * @brief itemDropped signal emitted when the user drops and item after dragging it
@@ -253,6 +291,24 @@ signals:
      * Show Manager header cursor
      */
     void alignToCursor(ShowItem *);
+
+    /**
+     * @brief itemResized signal emitted after the item duration has been
+     *        changed by dragging its right edge
+     */
+    void itemResized(ShowItem *);
+
+    /**
+     * @brief timingsRequested signal emitted when the user requests the
+     *        item timing editor from the context menu
+     */
+    void timingsRequested(ShowItem *);
+
+    /**
+     * @brief duplicateRequested signal emitted when the user requests a
+     *        clip duplicate from the context menu
+     */
+    void duplicateRequested(ShowItem *);
 
 protected:
     /**
@@ -269,10 +325,30 @@ protected:
     void mouseReleaseEvent(QGraphicsSceneMouseEvent *event) override;
 
     /**
+     * @brief mouseMoveEvent overridden method to resize the item when its
+     *        right edge is dragged
+     */
+    void mouseMoveEvent(QGraphicsSceneMouseEvent *event) override;
+
+    /**
+     * @brief hoverMoveEvent overridden method to show the resize cursor
+     *        when hovering the item's right edge
+     */
+    void hoverMoveEvent(QGraphicsSceneHoverEvent *event) override;
+
+    /**
+     * @brief hoverLeaveEvent restores the normal item cursor
+     */
+    void hoverLeaveEvent(QGraphicsSceneHoverEvent *event) override;
+
+    /**
      * @brief contextMenuEvent overridden method to handle the mouse right click over an item
      * and request the display of a contextual menu.
      */
     void contextMenuEvent(QGraphicsSceneContextMenuEvent *event) override;
+
+private:
+    bool isNearRightEdge(const QPointF &pos) const;
 
 protected:
     /** Font used for the item's labels */
@@ -287,6 +363,19 @@ protected:
     /** State flag that keeps if the item is pressed by mouse */
     bool m_pressed;
 
+    /** State flag that keeps if the item right edge is being dragged */
+    bool m_resizing;
+
+    /** Flag set when a resize actually changed the item duration */
+    bool m_resizeChanged;
+
+    /** Width and duration at the beginning of a resize gesture */
+    int m_resizeStartWidth;
+    quint32 m_resizeStartDuration;
+
+    /** Duration grid used while resizing (0 = no snapping) */
+    quint32 m_resizeGridStep;
+
     /** Width of the item in pixels */
     int m_width;
 
@@ -294,7 +383,7 @@ protected:
     QPointF m_pos;
 
     /** Horizontal scale to adapt width to the current time line */
-    int m_timeScale;
+    qreal m_timeScale;
 
     /** Track index this item belongs to */
     int m_trackIdx;
@@ -305,6 +394,8 @@ protected:
     /** Contextual menu actions */
     QAction *m_alignToCursor;
     QAction *m_lockAction;
+    QAction *m_timingsAction;
+    QAction *m_duplicateAction;
 };
 
 /** @} */

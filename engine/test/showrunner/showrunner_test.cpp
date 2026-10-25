@@ -24,6 +24,9 @@
 #include "show.h"
 #include "track.h"
 #include "scene.h"
+#include "rgbmatrix.h"
+#include "sequence.h"
+#include "chaserstep.h"
 #include "doc.h"
 #include "showrunner_test.h"
 
@@ -62,14 +65,81 @@ void ShowRunner_Test::intensity()
     QCOMPARE(runner.m_intensityMap[m_track->id()], 0.5);
 }
 
+void ShowRunner_Test::runtimeFunctionSpeedOverride()
+{
+    RGBMatrix *matrix = new RGBMatrix(m_doc);
+    QVERIFY(m_doc->addFunction(matrix) == true);
+    matrix->setDuration(250);
+
+    ShowFunction sf(99);
+    sf.setFunctionID(matrix->id());
+    sf.setFunctionSpeed(500);
+    QVERIFY(sf.prepareRuntimeFunction(m_doc) == true);
+
+    ShowRunner runner(m_doc, m_show->id());
+    Function *runtime = runner.runtimeFunctionFor(&sf, matrix);
+
+    QVERIFY(runtime != matrix);
+    QCOMPARE(runtime->duration(), quint32(500));
+    QCOMPARE(matrix->duration(), quint32(250));
+    QVERIFY(m_doc->function(runtime->id()) == NULL);
+}
+
+void ShowRunner_Test::runtimeSequenceDurationOverride()
+{
+    Scene scene(m_doc);
+    scene.setID(1);
+    Sequence *sequence = new Sequence(m_doc);
+    QVERIFY(m_doc->addFunction(sequence) == true);
+    sequence->setDurationMode(Chaser::PerStep);
+    sequence->addStep(ChaserStep(scene.id(), 0, 1000, 0));
+
+    ShowFunction sf(98);
+    sf.setFunctionID(sequence->id());
+    sf.setDuration(500);
+    sf.setStretch(true);
+    QVERIFY(sf.prepareRuntimeFunction(m_doc) == true);
+
+    ShowRunner runner(m_doc, m_show->id());
+    Function *runtime = runner.runtimeFunctionFor(&sf, sequence);
+
+    QVERIFY(runtime != sequence);
+    QCOMPARE(runtime->totalDuration(), quint32(500));
+    QCOMPARE(sequence->totalDuration(), quint32(1000));
+}
+
+void ShowRunner_Test::runtimeFunctionStopsCleanly()
+{
+    RGBMatrix *matrix = new RGBMatrix(m_doc);
+    QVERIFY(m_doc->addFunction(matrix) == true);
+    matrix->setDuration(250);
+
+    ShowFunction sf(97);
+    sf.setFunctionID(matrix->id());
+    sf.setFunctionSpeed(500);
+    QVERIFY(sf.prepareRuntimeFunction(m_doc) == true);
+
+    ShowRunner runner(m_doc, m_show->id());
+    runner.startShowFunction(&sf, matrix, 0);
+
+    QCOMPARE(runner.m_runningQueue.count(), 1);
+
+    runner.stop();
+    QCOMPARE(runner.m_runningQueue.count(), 0);
+}
+
 void ShowRunner_Test::stopRunner()
 {
     ShowRunner runner(m_doc, m_show->id());
     runner.m_elapsedTime = 500;
-    runner.m_runningQueue.append(QPair<Function*,quint32>(m_scene,1000));
+    ShowRunner::RunningFunction running;
+    running.function = m_scene;
+    running.showFunction = NULL;
+    running.stopTime = 1000;
+    runner.m_runningQueue.append(running);
     runner.stop();
     QCOMPARE(runner.m_elapsedTime, quint32(0));
     QCOMPARE(runner.m_runningQueue.count(), 0);
 }
 
-QTEST_APPLESS_MAIN(ShowRunner_Test)
+QTEST_MAIN(ShowRunner_Test)

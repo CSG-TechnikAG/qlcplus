@@ -46,6 +46,7 @@ public:
     QString label() const;
 
     void setSelected(bool sel);
+    void refreshTheme();
 
 signals:
     void selected();

@@ -43,6 +43,7 @@ public:
 
     bool invertedAppearance() const;
     void setInvertedAppearance(bool invert);
+    void refreshTheme();
 
 private:
     void updateTooltip();

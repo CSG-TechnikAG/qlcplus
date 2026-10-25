@@ -1,5 +1,18 @@
 <RCC>
     <qresource prefix="/">
+        <file alias="themes/base.qss">themes/base.qss</file>
+        <file alias="themes/shell.qss">themes/shell.qss</file>
+        <file alias="fonts/Inter-Regular.ttf">../../resources/fonts/Inter-Regular.ttf</file>
+        <file alias="fonts/Inter-Medium.ttf">../../resources/fonts/Inter-Medium.ttf</file>
+        <file alias="fonts/Inter-SemiBold.ttf">../../resources/fonts/Inter-SemiBold.ttf</file>
+        <file alias="themes/chevron-down-dark.png">themes/chevron-down-dark.png</file>
+        <file alias="themes/chevron-down-light.png">themes/chevron-down-light.png</file>
+        <file alias="themes/chevron-up-dark.png">themes/chevron-up-dark.png</file>
+        <file alias="themes/chevron-up-light.png">themes/chevron-up-light.png</file>
+        <file alias="themes/chevron-right-dark.png">themes/chevron-right-dark.png</file>
+        <file alias="themes/chevron-right-light.png">themes/chevron-right-light.png</file>
+        <file alias="themes/check-dark.png">themes/check-dark.png</file>
+        <file alias="themes/check-light.png">themes/check-light.png</file>
         <file alias="add_dump.png">../../resources/icons/png/add_dump.png</file>
         <file alias="animation.png">../../resources/icons/png/animation.png</file>
         <file alias="attach.png">../../resources/icons/png/attach.png</file>

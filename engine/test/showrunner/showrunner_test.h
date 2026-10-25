@@ -37,6 +37,9 @@ private slots:
     void initRunner();
     void intensity();
     void stopRunner();
+    void runtimeFunctionSpeedOverride();
+    void runtimeSequenceDurationOverride();
+    void runtimeFunctionStopsCleanly();
 
 private:
     Doc *m_doc;

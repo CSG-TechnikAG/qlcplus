@@ -87,7 +87,7 @@
          </property>
          <property name="icon">
           <iconset resource="qlcui.qrc">
-           <normaloff>:/uncheck.png</normaloff>:/uncheck.png</iconset>
+           <normaloff>:/icons/custom/scene-uncheck.svg</normaloff>:/icons/custom/scene-uncheck.svg</iconset>
          </property>
          <property name="iconSize">
           <size>
@@ -104,7 +104,7 @@
          </property>
          <property name="icon">
           <iconset resource="qlcui.qrc">
-           <normaloff>:/edit_add.png</normaloff>:/edit_add.png</iconset>
+           <normaloff>:/icons/custom/scene-add.svg</normaloff>:/icons/custom/scene-add.svg</iconset>
          </property>
          <property name="iconSize">
           <size>
@@ -121,7 +121,7 @@
          </property>
          <property name="icon">
           <iconset resource="qlcui.qrc">
-           <normaloff>:/check.png</normaloff>:/check.png</iconset>
+           <normaloff>:/icons/custom/scene-check.svg</normaloff>:/icons/custom/scene-check.svg</iconset>
          </property>
          <property name="iconSize">
           <size>
@@ -171,7 +171,7 @@
          </property>
          <property name="icon">
           <iconset resource="qlcui.qrc">
-           <normaloff>:/edit_remove.png</normaloff>:/edit_remove.png</iconset>
+           <normaloff>:/icons/custom/scene-remove.svg</normaloff>:/icons/custom/scene-remove.svg</iconset>
          </property>
          <property name="iconSize">
           <size>
@@ -225,7 +225,7 @@
          </property>
          <property name="icon">
           <iconset resource="qlcui.qrc">
-           <normaloff>:/uncheck.png</normaloff>:/uncheck.png</iconset>
+           <normaloff>:/icons/custom/scene-uncheck.svg</normaloff>:/icons/custom/scene-uncheck.svg</iconset>
          </property>
          <property name="iconSize">
           <size>
@@ -242,7 +242,7 @@
          </property>
          <property name="icon">
           <iconset resource="qlcui.qrc">
-           <normaloff>:/check.png</normaloff>:/check.png</iconset>
+           <normaloff>:/icons/custom/scene-check.svg</normaloff>:/icons/custom/scene-check.svg</iconset>
          </property>
          <property name="iconSize">
           <size>

@@ -88,6 +88,9 @@ protected:
     QHBoxLayout *m_hbox;
     QToolButton *m_button;
     QLabel *m_label;
+
+private:
+    void updateLabelStyle();
     AudioTriggerWidget *m_spectrum;
     ClickAndGoSlider *m_volumeSlider;
     AudioCapture *m_inputCapture;

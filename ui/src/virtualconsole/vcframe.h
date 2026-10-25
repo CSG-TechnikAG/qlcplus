@@ -137,6 +137,7 @@ protected slots:
 
 protected:
     void createHeader();
+    void updateHeaderStyle();
 
 protected:
     QHBoxLayout *m_hbox;

@@ -31,11 +31,6 @@
 #include <QFile>
 #include <QDir>
 
-#if defined(WIN32) || defined(Q_OS_WIN)
-#include <windows.h>
-#include <lmcons.h>
-#endif
-
 #include "apputil.h"
 #include "qlcconfig.h"
 
@@ -105,7 +100,14 @@ QStyle* AppUtil::saneStyle()
         if (keys.contains(var.toString()) == true)
             s_saneStyle = QStyleFactory::create(var.toString());
         else
-            s_saneStyle = QApplication::style();
+        {
+            /* Never hand a QStyleSheetStyle to an individual widget: with the
+             * built-in themes the application style is a stylesheet wrapper.
+             * Fusion is the portable "sane" fallback. */
+            s_saneStyle = QStyleFactory::create("Fusion");
+            if (s_saneStyle == NULL)
+                s_saneStyle = QApplication::style();
+        }
     }
 
     return s_saneStyle;
@@ -120,25 +122,32 @@ QStyle* AppUtil::saneStyle()
 bool styleCached = false;
 QMap<QString,QString> styleCache;
 
+QString AppUtil::userStylesheetDirectory()
+{
+    /* QDir::homePath() resolves to the same user folder on Linux, Windows
+     * and macOS, without platform specific environment handling. */
+    return QDir(QDir::homePath()).filePath(USERQLCPLUSDIR);
+}
+
+void AppUtil::reloadStyleSheets()
+{
+    styleCached = false;
+    styleCache.clear();
+}
+
 QString AppUtil::getStyleSheet(QString component)
 {
     QString block;
 
     if (styleCached == false)
     {
-#if defined(WIN32) || defined(Q_OS_WIN)
-        /* User's input profile directory on Windows */
-        LPTSTR home = (LPTSTR) malloc(256 * sizeof(TCHAR));
-        GetEnvironmentVariable(TEXT("UserProfile"), home, 256);
-        QString ssDir = QString("%1/%2").arg(QString::fromUtf16(reinterpret_cast<char16_t*> (home)))
-                    .arg(USERQLCPLUSDIR);
-        free(home);
-#else
-        /* User's input profile directory on *NIX systems */
-        QString ssDir = QString("%1/%2").arg(getenv("HOME")).arg(USERQLCPLUSDIR);
-#endif
+        QString ssDir = userStylesheetDirectory();
 
         styleCached = true;
+        styleCache.clear();
+
+        if (ssDir.isEmpty() == true)
+            return block;
 
         QFile ssFile(ssDir + QDir::separator() + USER_STYLESHEET_FILE);
         if (ssFile.exists() == false)
