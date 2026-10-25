@@ -65,6 +65,10 @@ struct FixtureInstance
     int ledCols = 1;                    // LED bar / matrix columns (layout width)
     int ledRows = 1;                    // LED bar / matrix rows (layout height)
     bool hazer = false;                 // true for a hazer (vs a fog machine)
+    bool hasLight = true;               // smoke/hazer units may also contain a light
+    QColor lightColor = QColor(255, 255, 255);
+    double lightIntensity = 1.0;
+    double smokeIntensity = 1.0;        // fog/haze output channel, independent of the light
 
     // Live (operate-mode) values. When `live` is false the renderer falls back
     // to the static colour / orientation above.
@@ -121,9 +125,16 @@ public:
         double life = 1.0;      // internal
         double size = 0.2;      // world radius (metres)
         double alpha = 0.0;     // 0..1
+        double seed = 0.0;      // stochastic turbulence phase
+        bool haze = false;      // fine atmospheric haze vs dense fog
+        QColor color = QColor(205, 210, 217);
     };
     /** Puffs emitted by a smoke machine (empty for other fixtures). */
     const QList<SmokeParticle> &smokeParticles(quint32 id) const;
+
+    /** Smoothed atmospheric haze/fog levels from hazer/fogger activity. */
+    double hazeLevel() const { return m_hazeLevel; }
+    double fogLevel() const { return m_fogLevel; }
 
     /*********************************************************************
      * Load & Save (3D-only extras)
@@ -192,6 +203,8 @@ private:
     };
     QHash<quint32, SmokeState> m_smoke;
     QList<SmokeParticle> m_noSmoke;     // returned for non-smoke fixtures
+    double m_hazeLevel = 0.0;
+    double m_fogLevel = 0.0;
 };
 
 #endif // FIXTURESCENE_H

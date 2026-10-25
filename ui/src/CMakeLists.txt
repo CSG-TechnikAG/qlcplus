@@ -125,6 +125,10 @@ add_library(${module_name}
     preview3d/preview3d.cpp preview3d/preview3d.h
     preview3d/preview3dview.cpp preview3d/preview3dview.h
     preview3d/preview3draster.cpp preview3d/preview3draster.h
+    preview3d/preview3drenderbackend.cpp preview3d/preview3drenderbackend.h
+    preview3d/preview3dopenglrenderer.cpp preview3d/preview3dopenglrenderer.h
+    preview3d/preview3dsceneframe.h
+    preview3d/preview3dsettingsdialog.cpp preview3d/preview3dsettingsdialog.h
     preview3d/truss.cpp preview3d/truss.h
     preview3d/trussscene.cpp preview3d/trussscene.h
     preview3d/trusspanel.cpp preview3d/trusspanel.h
@@ -203,6 +207,15 @@ target_link_libraries(${module_name} PUBLIC
     Qt${QT_MAJOR_VERSION}::Svg
     qlcplusengine
 )
+
+# GPU 3D preview backends are built when the Qt OpenGL module is available.
+if(QT_VERSION_MAJOR GREATER 5)
+    find_package(Qt6 QUIET COMPONENTS OpenGL)
+    if(TARGET Qt6::OpenGL)
+        target_link_libraries(${module_name} PRIVATE Qt6::OpenGL)
+        target_compile_definitions(${module_name} PRIVATE QLC_PREVIEW3D_OPENGL)
+    endif()
+endif()
 
 # Add resources and RGB Script deps
 if(QT_VERSION_MAJOR GREATER 5)

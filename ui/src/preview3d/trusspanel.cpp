@@ -183,6 +183,14 @@ void TrussPanel::setSelectedId(int id)
 {
     if (m_scene == NULL)
         return;
+    if (id < 0)
+    {
+        m_updating = true;
+        m_list->setCurrentRow(-1);
+        m_updating = false;
+        loadFields();
+        return;
+    }
     for (int i = 0; i < m_scene->trusses().size(); ++i)
     {
         if (m_scene->trusses().at(i).id == id)

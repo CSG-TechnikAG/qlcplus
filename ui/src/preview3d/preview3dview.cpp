@@ -159,6 +159,7 @@ Preview3DView::Preview3DView(QWidget *parent)
     , m_hoverTrussId(0)
     , m_hoverPort(-1)
     , m_fixtureScene(NULL)
+    , m_renderBackend(NULL)
     , m_fixtureInteractive(false)
     , m_selectedFixture(-1)
     , m_dragFixture(false)
@@ -179,13 +180,13 @@ Preview3DView::Preview3DView(QWidget *parent)
     m_floorEdge = QColor(96, 126, 156);
     m_roomBoxEdge = QColor(124, 156, 188);
 
-    m_stageTop = QColor(30, 92, 138);
-    m_stageTopGrid = QColor(130, 200, 240, 150);
-    m_stageSide = QColor(18, 50, 77);
-    m_stageEdge = QColor(79, 195, 247);
+    m_stageTop = QColor(45, 54, 63);
+    m_stageTopGrid = QColor(91, 105, 119, 120);
+    m_stageSide = QColor(25, 30, 36);
+    m_stageEdge = QColor(108, 120, 132);
 
-    m_legColor = QColor(84, 98, 113);
-    m_legEdge = QColor(120, 140, 160);
+    m_legColor = QColor(48, 56, 65);
+    m_legEdge = QColor(105, 118, 132);
     m_trussBrace = QColor(126, 136, 150);
     m_selectColor = QColor(120, 230, 255);
 
@@ -325,6 +326,17 @@ void Preview3DView::setFixtureScene(FixtureScene *scene)
     update();
 }
 
+void Preview3DView::setRenderBackend(Preview3DRenderBackend *backend)
+{
+    m_renderBackend = backend;
+}
+
+void Preview3DView::setRenderSettings(const Preview3DRenderSettings &settings)
+{
+    m_renderSettings = settings;
+    update();
+}
+
 void Preview3DView::setFixtureInteractive(bool on)
 {
     if (m_fixtureInteractive == on)
@@ -390,6 +402,395 @@ bool Preview3DView::project(const QVector3D &world, QPointF &out) const
         return false;
     out = projectCamera(cam);
     return true;
+}
+
+Preview3DSceneFrame Preview3DView::sceneFrame() const
+{
+    Preview3DSceneFrame frame;
+    frame.viewport = size();
+    frame.devicePixelRatio = devicePixelRatioF();
+    frame.eye = m_eye;
+    frame.right = m_right;
+    frame.up = m_up;
+    frame.forward = m_fwd;
+    frame.target = m_target;
+    frame.yaw = m_yaw;
+    frame.pitch = m_pitch;
+    frame.distance = m_dist;
+    frame.fovY = m_fovY;
+    frame.nearPlane = m_near;
+    frame.roomX0 = m_rx0;
+    frame.roomX1 = m_rx1;
+    frame.roomY0 = m_ry0;
+    frame.roomY1 = m_ry1;
+    frame.zFloor = m_zFloor;
+    frame.zTop = m_zTop;
+    frame.stageX = m_stageX;
+    frame.stageY = m_stageY;
+    frame.showGrid = m_showGrid;
+    frame.beamPreview = m_beamPreview;
+    frame.live = (m_fixtureScene != NULL && m_fixtureScene->isLive());
+    frame.fixtureInteractive = m_fixtureInteractive;
+    frame.selectedFixture = (m_selectedFixture >= 0) ? quint32(m_selectedFixture) : 0xFFFFFFFFu;
+    frame.shadows = m_renderSettings.shadows;
+    frame.haze = m_renderSettings.haze;
+    frame.adaptiveQuality = true;
+    double renderScale = m_renderSettings.resolutionScale;
+    int msaaSamples = 0;
+    switch (m_renderSettings.quality)
+    {
+    case Preview3DQuality::Low:
+        renderScale = qMin(renderScale, 0.75);
+        break;
+    case Preview3DQuality::Medium:
+        msaaSamples = 2;
+        break;
+    case Preview3DQuality::Ultra:
+        msaaSamples = 4;
+        break;
+    case Preview3DQuality::High:
+    default:
+        msaaSamples = 4;
+        break;
+    }
+    frame.resolutionScale = qBound(0.5, renderScale, 2.0);
+    frame.msaaSamples = msaaSamples;
+
+    if (m_fixtureScene != NULL)
+    {
+        frame.fixtures = m_fixtureScene->fixtures();
+        frame.smokeHaze = m_fixtureScene->hazeLevel();
+        frame.smokeFog = m_fixtureScene->fogLevel();
+        frame.hazeDensity = (m_renderSettings.haze ? 0.018 : 0.0)
+                          + frame.smokeHaze * 0.06
+                          + frame.smokeFog * 0.012;
+        if (frame.smokeHaze > 0.01 || frame.smokeFog > 0.01)
+            frame.haze = true;
+        if (frame.smokeHaze > 0.01)
+        {
+            const QColor base(11, 17, 24);
+            const QColor haze(38, 48, 60);
+            const double blend = qBound(0.0, 0.28 + frame.smokeHaze * 0.60, 0.80);
+            frame.hazeColor = QColor(int(base.red() + (haze.red() - base.red()) * blend),
+                                     int(base.green() + (haze.green() - base.green()) * blend),
+                                     int(base.blue() + (haze.blue() - base.blue()) * blend));
+        }
+    }
+    if (m_scene != NULL)
+    {
+        for (const Truss &t : m_scene->trusses())
+        {
+            if (!t.visible)
+                continue;
+            const bool selected = m_trussInteractive && (t.id == m_selectedId);
+            const QColor color = selected ? m_selectColor : t.color;
+            const QList<TrussSegment> segs = t.segments(m_scene->linkedPorts(t.id), true);
+            for (const TrussSegment &s : segs)
+            {
+                Preview3DTrussSegmentSnapshot snap;
+                snap.a = s.a;
+                snap.b = s.b;
+                snap.radius = s.chord ? 0.030 : 0.018;
+                snap.color = s.chord ? color : color.darker(125);
+                snap.chord = s.chord;
+                frame.trussSegments << snap;
+            }
+        }
+    }
+
+    // Coupler collars make linked truss ends read as actual connectors rather
+    // than overlapping tubes.
+    if (m_scene != NULL)
+    {
+        for (const TrussLink &link : m_scene->links())
+        {
+            const Truss *a = m_scene->trussById(link.a);
+            const Truss *b = m_scene->trussById(link.b);
+            if (a == NULL || a->visible == false)
+                continue;
+            const QList<TrussPort> ports = a->localPorts();
+            if (link.aPort < 0 || link.aPort >= ports.size())
+                continue;
+            const TrussXform xf = a->xform();
+            const bool selected = m_trussInteractive &&
+                    (m_selectedId == link.a || m_selectedId == link.b);
+            Preview3DTrussConnectorSnapshot connector;
+            connector.pos = xf.apply(ports.at(link.aPort).localPos);
+            connector.direction = xf.rot.rotatedVector(ports.at(link.aPort).localDir).normalized();
+            connector.radius = qMax(0.04, qMin(a->width, a->height) * 0.24);
+            connector.length = qMax(0.07, qMin(a->width, a->height) * 0.34);
+            connector.color = selected ? m_selectColor
+                                       : (a->color.darker(120));
+            frame.trussConnectors << connector;
+            Q_UNUSED(b)
+        }
+    }
+
+    // Build light beams for the GPU pass. Beam lengths stop at the room, stage
+    // and truss occluders; surface shadows are handled by the GPU shadow map.
+    auto addBeam = [&frame, this](const QVector3D &origin, const QQuaternion &rot,
+                                  double beamDeg, const QColor &color, int alpha)
+    {
+        Preview3DBeamSnapshot beam;
+        beam.origin = origin;
+        beam.rotation = rot;
+        beam.beamDeg = beamDeg;
+        beam.color = color;
+        beam.alpha = alpha;
+        const QVector3D dir = rot.rotatedVector(QVector3D(0.0, 1.0, 0.0));
+        beam.length = beamRay(origin, dir);
+        frame.beams << beam;
+    };
+
+    auto addRectBeam = [&frame, this](const QVector3D &origin, const QQuaternion &rot,
+                                      double beamDeg, double halfWidth, double halfHeight,
+                                      const QColor &color, int alpha)
+    {
+        Preview3DBeamSnapshot beam;
+        beam.origin = origin;
+        beam.rotation = rot;
+        beam.beamDeg = beamDeg;
+        beam.color = color;
+        beam.alpha = alpha;
+        beam.rectangular = true;
+        beam.halfWidth = halfWidth;
+        beam.halfHeight = halfHeight;
+        const QVector3D dir = rot.rotatedVector(QVector3D(0.0, 1.0, 0.0));
+        beam.length = beamRay(origin, dir);
+        beam.spread = qTan(qDegreesToRadians(beamDeg * 0.5)) * beam.length;
+        frame.beams << beam;
+    };
+
+    // Keep the truss occluder list fresh for the GPU beam pass.
+    rebuildOccluders();
+
+    if (m_fixtureScene != NULL && (m_fixtureScene->isLive() || m_beamPreview))
+    {
+        for (const FixtureInstance &fi : m_fixtureScene->fixtures())
+        {
+            if (!fi.visible)
+                continue;
+            const bool sel = m_fixtureInteractive && (int(fi.id) == m_selectedFixture);
+            const bool live = fi.live;
+            const double inten = live ? fi.liveIntensity : 1.0;
+            const bool lit = (!live) || (inten > 0.02) || (fi.model == FixtureModel::Derby);
+            if (!lit)
+                continue;
+            const QColor gel = sel ? m_selectColor
+                               : (live ? (fi.model == FixtureModel::Smoke && fi.hasLight
+                                          ? fi.lightColor : fi.liveColor)
+                                       : fi.color);
+            const QQuaternion rot = QQuaternion::fromAxisAndAngle(QVector3D(0.0, 0.0, 1.0), fi.yaw)
+                                  * QQuaternion::fromAxisAndAngle(QVector3D(1.0, 0.0, 0.0), fi.pitch);
+            const int alpha = qBound(0, int(80.0 * inten), 90);
+
+            switch (fi.model)
+            {
+            case FixtureModel::Lamp:
+            {
+                const double radius = qMax(0.05, 0.5 * qMax(fi.size.x(), fi.size.z()));
+                const double len = qMax(fi.size.y(), radius * 1.3);
+                const QVector3D front = fi.pos + rot.rotatedVector(QVector3D(0.0, len * 0.5 + 0.022, 0.0));
+                addBeam(front, rot, fi.beamDeg, gel, alpha);
+                break;
+            }
+            case FixtureModel::Bar:
+            {
+                const double sx = fi.size.x();
+                const double len = qMax(fi.size.y(), fi.size.z());
+                const int cols = qMax(1, fi.ledCols);
+                const double dx = sx / cols;
+                for (int cix = 0; cix < cols; ++cix)
+                {
+                    const double lx = -sx * 0.5 + dx * (cix + 0.5);
+                    const QVector3D o = fi.pos + rot.rotatedVector(QVector3D(lx, len * 0.5 + 0.006, 0.0));
+                    QColor bc = gel;
+                    double bi = inten;
+                    if (live && fi.liveHeads.isEmpty() == false)
+                    {
+                        const int idx = cix % fi.liveHeads.size();
+                        bc = fi.liveHeads.at(idx);
+                        if (idx < fi.liveHeadIntensity.size())
+                            bi = fi.liveHeadIntensity.at(idx);
+                    }
+                    const int a = qBound(0, int(55.0 * bi), 70);
+                    if (a > 0)
+                        addRectBeam(o, rot, qBound(6.0, fi.beamDeg, 45.0),
+                                    dx * 0.45, fi.size.z() * 0.5, bc, a);
+                }
+                break;
+            }
+            case FixtureModel::Derby:
+            {
+                const double sz = fi.size.z();
+                const double baseH = qMax(0.03, sz * 0.35);
+                const double domeH = qMax(0.05, sz * 0.55);
+                const QVector3D baseC = fi.pos + rot.rotatedVector(QVector3D(0.0, 0.0, -sz * 0.35));
+                const QVector3D domeTop = baseC + rot.rotatedVector(QVector3D(0.0, 0.0, baseH * 0.5 + domeH * 0.8));
+                const int beams = 6;
+                const double tilt = 0.9;
+                const double ct = qCos(tilt);
+                const double st = qSin(tilt);
+                for (int i = 0; i < beams; ++i)
+                {
+                    const double a = 2.0 * M_PI * i / beams;
+                    const QVector3D localDir(qCos(a) * st, qSin(a) * st, -ct);
+                    const QQuaternion dirRot = rot
+                        * QQuaternion::rotationTo(QVector3D(0.0, 1.0, 0.0), localDir.normalized());
+                    const QColor beamCol = sel ? m_selectColor
+                                               : (live ? gel
+                                                       : QColor::fromHsv((i * 360 / beams + 20) % 360, 200, 255));
+                    addBeam(domeTop, dirRot, qBound(6.0, fi.beamDeg, 18.0), beamCol,
+                            qBound(45, int(70.0 * inten), 80));
+                }
+                break;
+            }
+            case FixtureModel::MovingHead:
+            case FixtureModel::Scanner:
+            {
+                const double sx = fi.size.x();
+                const double sy = fi.size.y();
+                const double sz = fi.size.z();
+                double mhYaw, mhPitch;
+                if (live && fi.liveDirValid)
+                {
+                    const QVector3D d = fi.liveDir.normalized();
+                    mhPitch = qRadiansToDegrees(qAsin(qBound(-1.0, double(d.z()), 1.0)));
+                    mhYaw = qRadiansToDegrees(qAtan2(-double(d.x()), double(d.y())));
+                }
+                else
+                {
+                    mhYaw = live ? fi.yaw + fi.livePan : fi.yaw;
+                    mhPitch = live ? fi.pitch + fi.liveTilt : fi.pitch;
+                }
+                const QQuaternion pan = QQuaternion::fromAxisAndAngle(QVector3D(0.0, 0.0, 1.0), mhYaw);
+                const QQuaternion head = pan * QQuaternion::fromAxisAndAngle(QVector3D(1.0, 0.0, 0.0), mhPitch);
+                QVector3D front;
+                if (fi.model == FixtureModel::MovingHead)
+                {
+                    const double bodyR = qMax(0.05, 0.32 * qMin(sx, sy));
+                    front = fi.pos + head.rotatedVector(QVector3D(0.0, bodyR + 0.012, 0.0));
+                }
+                else
+                {
+                    front = fi.pos + QVector3D(0.0, 0.0, sz * 0.24)
+                          + head.rotatedVector(QVector3D(0.0, sy * 0.32, 0.0));
+                }
+                addBeam(front, head, fi.beamDeg, gel, alpha);
+                break;
+            }
+            case FixtureModel::Strobe:
+            {
+                const QVector3D origin = fi.pos + rot.rotatedVector(QVector3D(0.0, fi.size.y() * 0.5 + 0.01, 0.0));
+                addRectBeam(origin, rot, qBound(24.0, fi.beamDeg, 90.0),
+                            fi.size.x() * 0.42, fi.size.z() * 0.3, gel,
+                            qBound(0, int(60.0 * inten), 75));
+                break;
+            }
+            case FixtureModel::Laser:
+            {
+                const QVector3D origin = fi.pos + rot.rotatedVector(QVector3D(0.0, fi.size.y() * 0.5 + 0.012, 0.0));
+                static const QColor laserPalette[] = {
+                    QColor(80, 255, 140), QColor(255, 70, 210), QColor(80, 190, 255),
+                    QColor(255, 230, 90), QColor(255, 255, 255)
+                };
+                for (int i = 0; i < 5; ++i)
+                {
+                    const double angle = (i - 2.0) * 4.5;
+                    const QQuaternion rayRot = rot
+                        * QQuaternion::fromAxisAndAngle(QVector3D(0.0, 0.0, 1.0), angle);
+                    QColor color = gel;
+                    if (live && fi.liveHeads.isEmpty() == false)
+                        color = fi.liveHeads.at(i % fi.liveHeads.size());
+                    else if (!live)
+                        color = laserPalette[i % 5];
+                    addBeam(origin, rayRot, 2.8, color, qBound(0, int(65.0 * inten), 80));
+                }
+                break;
+            }
+            case FixtureModel::Dimmer:
+                break;
+            case FixtureModel::Smoke:
+            {
+                if (fi.hasLight == false)
+                    break;   // fogger/hazer with no built-in light
+                const double lightInten = live ? fi.lightIntensity : 1.0;
+                if (lightInten <= 0.005)
+                    break;
+                const QColor lightGel = live ? fi.lightColor : fi.color;
+                const QVector3D origin = fi.pos + rot.rotatedVector(
+                            QVector3D(0.0, fi.size.y() * 0.5 + 0.012, fi.size.z() * 0.18));
+                addBeam(origin, rot, qBound(6.0, fi.beamDeg, 70.0), lightGel,
+                        qBound(0, int(65.0 * lightInten), 80));
+                break;
+            }
+            default:
+            {
+                const double radius = qMax(0.05, 0.5 * qMax(fi.size.x(), fi.size.z()));
+                const double len = qMax(fi.size.y(), radius * 1.1);
+                const QVector3D front = fi.pos + rot.rotatedVector(QVector3D(0.0, len * 0.5 + 0.02, 0.0));
+                addBeam(front, rot, fi.beamDeg, gel, alpha);
+                break;
+            }
+            }
+        }
+    }
+
+    // Build the smoke billboards after the beams so each puff can pick up the
+    // light that actually reaches it.
+    if (m_fixtureScene != NULL && m_fixtureScene->isLive())
+    {
+        for (const FixtureInstance &fi : m_fixtureScene->fixtures())
+        {
+            if (!fi.visible)
+                continue;
+            const QList<FixtureScene::SmokeParticle> &particles =
+                    m_fixtureScene->smokeParticles(fi.id);
+            for (const FixtureScene::SmokeParticle &particle : particles)
+            {
+                if (particle.alpha <= 0.003)
+                    continue;
+                Preview3DSmokeSnapshot smoke;
+                smoke.pos = particle.pos;
+                smoke.size = particle.size;
+                smoke.alpha = particle.haze ? particle.alpha * 0.35 : particle.alpha;
+                smoke.haze = particle.haze;
+                smoke.color = particle.color;
+
+                int red = smoke.color.red();
+                int green = smoke.color.green();
+                int blue = smoke.color.blue();
+                for (const Preview3DBeamSnapshot &beam : frame.beams)
+                {
+                    const QVector3D dir = beam.rotation.rotatedVector(
+                                QVector3D(0, 1, 0)).normalized();
+                    const QVector3D rel = smoke.pos - beam.origin;
+                    const double along = QVector3D::dotProduct(rel, dir);
+                    if (along < 0.02 || along > beam.length)
+                        continue;
+                    const double radius = beam.rectangular
+                            ? qMax(beam.halfWidth, beam.halfHeight) + beam.spread
+                            : qTan(qDegreesToRadians(beam.beamDeg * 0.5)) * along;
+                    if (radius <= 0.001)
+                        continue;
+                    const double distance = (rel - dir * along).length();
+                    if (distance > radius * 1.35)
+                        continue;
+                    const double radial = 1.0 - distance / (radius * 1.35);
+                    const double falloff = radial * (1.0 - along / beam.length) *
+                                           (beam.alpha / 255.0);
+                    const double lit = qBound(0.0, falloff * (smoke.haze ? 0.75 : 1.5), 1.0);
+                    red = qMin(255, red + int(beam.color.red() * lit));
+                    green = qMin(255, green + int(beam.color.green() * lit));
+                    blue = qMin(255, blue + int(beam.color.blue() * lit));
+                }
+                smoke.color = QColor(red, green, blue);
+                frame.smoke << smoke;
+            }
+        }
+    }
+
+    return frame;
 }
 
 bool Preview3DView::worldToScreen(const QVector3D &world, QPointF &screen) const
@@ -738,9 +1139,13 @@ void Preview3DView::rasterStage(SoftwareRaster &r) const
         }
     }
 
-    // Deck top.
+    // Deck top: dark layered boards with subtle longitudinal seams.
     const QList<QVector3D> top = { c[0], c[1], c[2], c[3] };
     rasterPolygon(r, top, m_stageTop, m_stageEdge, 2.0);
+
+    const QColor seam(31, 37, 43);
+    for (double y = 0.5; y < m_stageY - 1e-6; y += 0.5)
+        rasterLine(r, QVector3D(0.0, y, 0.002), QVector3D(m_stageX, y, 0.002), seam, 1.0);
 
     if (!m_showGrid)
         return;
@@ -773,6 +1178,23 @@ void Preview3DView::rasterTrusses(SoftwareRaster &r) const
         const QList<TrussSegment> segs = t.segments(m_scene->linkedPorts(t.id), true);
         for (const TrussSegment &s : segs)
             rasterLine(r, s.a, s.b, s.chord ? chord : brace, s.chord ? cw : bw);
+    }
+
+    for (const TrussLink &link : m_scene->links())
+    {
+        const Truss *a = m_scene->trussById(link.a);
+        if (a == NULL || a->visible == false)
+            continue;
+        const QList<TrussPort> ports = a->localPorts();
+        if (link.aPort < 0 || link.aPort >= ports.size())
+            continue;
+        const TrussXform xf = a->xform();
+        const QVector3D pos = xf.apply(ports.at(link.aPort).localPos);
+        QVector3D dir = xf.rot.rotatedVector(ports.at(link.aPort).localDir).normalized();
+        const bool selected = m_trussInteractive &&
+                (m_selectedId == link.a || m_selectedId == link.b);
+        const QColor coupler = selected ? m_selectColor : a->color.darker(120);
+        rasterLine(r, pos - dir * 0.065, pos + dir * 0.065, coupler, selected ? 6.0 : 4.0);
     }
 }
 
@@ -1217,9 +1639,18 @@ void Preview3DView::rasterFixtures(SoftwareRaster &r) const
         // Live (operate mode) brightness and colour.
         const bool live = fi.live;
         const double inten = live ? fi.liveIntensity : 1.0;
-        const bool lit = (!live) || (inten > 0.02);
-        const QColor gel = sel ? m_selectColor : (live ? fi.liveColor : fi.color);
-        const QColor lens = (lit || sel) ? gel : gel.darker(280);
+        // Match the visible emitter: operate output, or the design-mode beam
+        // preview. With neither, the lens is dark.
+        const bool lensLit = sel ||
+                (live ? (fi.model == FixtureModel::Smoke
+                         ? fi.lightIntensity > 0.02 : inten > 0.02)
+                      : m_beamPreview);
+        const QColor gel = sel ? m_selectColor
+                               : (live ? (fi.model == FixtureModel::Smoke && fi.hasLight
+                                          ? fi.lightColor : fi.liveColor)
+                                       : fi.color);
+        const QColor lens = sel ? m_selectColor
+                                : (lensLit ? gel : QColor(10, 10, 12));
 
         const QQuaternion rot = QQuaternion::fromAxisAndAngle(QVector3D(0.0, 0.0, 1.0), fi.yaw)
                               * QQuaternion::fromAxisAndAngle(QVector3D(1.0, 0.0, 0.0), fi.pitch);
@@ -1491,6 +1922,15 @@ void Preview3DView::rasterFixtures(SoftwareRaster &r) const
             const QVector3D nozzle = fi.pos + rot.rotatedVector(QVector3D(0.0, sy * 0.5 + sy * 0.16, sz * 0.26));
             rasterCylinder(r, nozzle, rot, nozzleR, sy * 0.32, metal, metal.darker(130), 12);
 
+            if (fi.hasLight)
+            {
+                const QVector3D lamp = fi.pos + rot.rotatedVector(
+                            QVector3D(0.0, sy * 0.5 + 0.008, sz * 0.18));
+                const QColor lampColor = live ? fi.lightColor : fi.color;
+                rasterDisk(r, lamp, rot, qMax(0.018, qMin(sx, sz) * 0.13),
+                           sel ? m_selectColor : lampColor, shellEdge);
+            }
+
             // Fluid bottle on top.
             const QQuaternion up = rot * QQuaternion::fromAxisAndAngle(QVector3D(1.0, 0.0, 0.0), 90.0);
             const double tankR = qMax(0.03, sx * 0.12);
@@ -1715,8 +2155,21 @@ void Preview3DView::rasterFixtures(SoftwareRaster &r) const
             break;
         }
         case FixtureModel::Dimmer:
+            break;
         case FixtureModel::Smoke:
-            break;   // no light beam
+        {
+            if (fi.hasLight == false)
+                break;
+            const double lightInten = live ? fi.lightIntensity : 1.0;
+            if (lightInten <= 0.005)
+                break;
+            const QColor lightGel = live ? fi.lightColor : fi.color;
+            const QVector3D origin = fi.pos + rot.rotatedVector(
+                        QVector3D(0.0, fi.size.y() * 0.5 + 0.012, fi.size.z() * 0.18));
+            rasterFixtureBeam(r, origin, rot, qBound(6.0, fi.beamDeg, 70.0), lightGel, 0.0,
+                              qBound(0, int(65.0 * lightInten), 80));
+            break;
+        }
         default: // Par
         {
             const double radius = qMax(0.05, 0.5 * qMax(fi.size.x(), fi.size.z()));
@@ -1758,7 +2211,7 @@ void Preview3DView::rasterFixtures(SoftwareRaster &r) const
             pf.sp = projectCamera(cam);
             pf.iw = 1.0 / cam.z();
             pf.radius = qMin(80.0, p.size * focal / cam.z());
-            pf.color = QColor(206, 211, 221);
+            pf.color = p.color;
             pf.color.setAlpha(qBound(0, int(p.alpha * 255.0), 255));
             pf.depth = cam.z();
             puffs << pf;
@@ -1777,27 +2230,70 @@ bool Preview3DView::pickFixture(const QPoint &screen, int &id, double &dist) con
     if (m_fixtureScene == NULL)
         return false;
 
-    const double maxD = 16.0;
-    double best = maxD;
+    double bestDepth = 1e9;
     bool found = false;
 
     for (const FixtureInstance &fi : m_fixtureScene->fixtures())
     {
         if (!fi.visible)
             continue;
-        QPointF sp;
-        if (!project(fi.pos, sp))
+
+        const QVector3D cam = toCamera(fi.pos);
+        if (cam.z() < m_near)
             continue;
-        const double d = QLineF(sp, QPointF(screen)).length();
-        if (d < best)
+
+        const QQuaternion rot = QQuaternion::fromAxisAndAngle(QVector3D(0, 0, 1), fi.yaw)
+                              * QQuaternion::fromAxisAndAngle(QVector3D(1, 0, 0), fi.pitch);
+        const QVector3D h = fi.size * 0.5f;
+        const QVector3D local[8] = {
+            QVector3D(-h.x(), -h.y(), -h.z()), QVector3D( h.x(), -h.y(), -h.z()),
+            QVector3D( h.x(),  h.y(), -h.z()), QVector3D(-h.x(),  h.y(), -h.z()),
+            QVector3D(-h.x(), -h.y(),  h.z()), QVector3D( h.x(), -h.y(),  h.z()),
+            QVector3D( h.x(),  h.y(),  h.z()), QVector3D(-h.x(),  h.y(),  h.z())
+        };
+
+        QRectF bounds;
+        bool first = true;
+        for (int i = 0; i < 8; ++i)
         {
-            best = d;
-            id = fi.id;
+            QPointF p;
+            if (!project(fi.pos + rot.rotatedVector(local[i]), p))
+            {
+                first = false;
+                break;
+            }
+            if (first)
+            {
+                bounds = QRectF(p, p);
+                first = false;
+            }
+            else
+            {
+                bounds.setLeft(qMin(bounds.left(), p.x()));
+                bounds.setRight(qMax(bounds.right(), p.x()));
+                bounds.setTop(qMin(bounds.top(), p.y()));
+                bounds.setBottom(qMax(bounds.bottom(), p.y()));
+            }
+        }
+        if (first)
+            continue;
+
+        // A small pixel margin accounts for the lens/yoke edges. The body box
+        // remains far tighter than the previous centre-radius hit test.
+        bounds.adjust(-3.0, -3.0, 3.0, 3.0);
+        if (bounds.contains(QPointF(screen)) == false)
+            continue;
+
+        if (cam.z() < bestDepth)
+        {
+            bestDepth = cam.z();
+            id = int(fi.id);
             found = true;
         }
     }
+
     if (found)
-        dist = best;
+        dist = bestDepth;
     return found;
 }
 
@@ -1861,36 +2357,44 @@ void Preview3DView::renderTrussGizmos(QPainter &p)
 
 void Preview3DView::renderOverlay(QPainter &p)
 {
-    p.setPen(Qt::NoPen);
-    p.setBrush(QColor(0, 0, 0, 110));
-
-    QString hint = tr("Drag: rotate    \u00b7    Right / Middle drag: pan    \u00b7    Wheel: zoom");
-    if (m_trussInteractive)
-        hint = tr("Drag a truss: move    \u00b7    Drag a ring: link    \u00b7    Empty: rotate    \u00b7    Wheel: zoom");
+    if (m_renderSettings.showHints == false && m_renderSettings.showFps == false)
+        return;
 
     QFont f = p.font();
     f.setPointSizeF(qMax(8.0, f.pointSizeF() - 0.5));
     p.setFont(f);
-
     const QFontMetrics fm(f);
     const int pad = 8;
-    const int tw = fm.horizontalAdvance(hint);
-    const QRect box(pad, height() - fm.height() - pad * 2, tw + pad * 2, fm.height() + pad);
-    p.drawRoundedRect(box, 5, 5);
 
-    p.setPen(QColor(210, 224, 236));
-    p.drawText(box, Qt::AlignCenter, hint);
+    if (m_renderSettings.showHints)
+    {
+        p.setPen(Qt::NoPen);
+        p.setBrush(QColor(0, 0, 0, 110));
 
-    // FPS counter (top-right).
-    const QString fps = tr("FPS %1  \u00b7  %2 ms")
-        .arg(m_fps, 0, 'f', 1).arg(m_lastFrameMs, 0, 'f', 1);
-    const int fw = fm.horizontalAdvance(fps);
-    const QRect fbox(width() - fw - pad * 3, pad, fw + pad * 2, fm.height() + pad);
-    p.setPen(Qt::NoPen);
-    p.setBrush(QColor(0, 0, 0, 110));
-    p.drawRoundedRect(fbox, 5, 5);
-    p.setPen(QColor(180, 235, 255));
-    p.drawText(fbox, Qt::AlignCenter, fps);
+        QString hint = tr("Drag: rotate    \u00b7    Right / Middle drag: pan    \u00b7    Wheel: zoom");
+        if (m_trussInteractive)
+            hint = tr("Drag a truss: move    \u00b7    Drag a ring: link    \u00b7    Empty: rotate    \u00b7    Wheel: zoom");
+
+        const int tw = fm.horizontalAdvance(hint);
+        const QRect box(pad, height() - fm.height() - pad * 2, tw + pad * 2, fm.height() + pad);
+        p.drawRoundedRect(box, 5, 5);
+
+        p.setPen(QColor(210, 224, 236));
+        p.drawText(box, Qt::AlignCenter, hint);
+    }
+
+    if (m_renderSettings.showFps)
+    {
+        const QString fps = tr("FPS %1  \u00b7  %2 ms")
+            .arg(m_fps, 0, 'f', 1).arg(m_lastFrameMs, 0, 'f', 1);
+        const int fw = fm.horizontalAdvance(fps);
+        const QRect fbox(width() - fw - pad * 3, pad, fw + pad * 2, fm.height() + pad);
+        p.setPen(Qt::NoPen);
+        p.setBrush(QColor(0, 0, 0, 110));
+        p.drawRoundedRect(fbox, 5, 5);
+        p.setPen(QColor(180, 235, 255));
+        p.drawText(fbox, Qt::AlignCenter, fps);
+    }
 }
 
 void Preview3DView::renderScene(QPainter &p)
@@ -1902,17 +2406,36 @@ void Preview3DView::renderScene(QPainter &p)
     // Drop supersampling while the camera/trusses are being dragged or while
     // operate-mode live values are streaming in, so it stays responsive.
     const bool live = (m_fixtureScene != NULL && m_fixtureScene->isLive());
-    const int ss = (m_dragMode == DragNone && !live) ? 2 : 1;
-    m_raster.begin(width(), height(), ss);
-    m_raster.fillGradient(m_bgTop, m_bgBottom);
+    bool gpuFrame = false;
+    if (m_renderBackend != NULL && m_renderBackend->isInitialized() == true)
+    {
+        QImage gpuImage;
+        QString gpuError;
+        if (m_renderBackend->renderFrame(sceneFrame(), gpuImage, &gpuError) == true)
+        {
+            p.drawImage(0, 0, gpuImage);
+            gpuFrame = true;
+        }
+    }
 
-    rasterFloor(m_raster);
-    rasterRoomBox(m_raster);
-    rasterStage(m_raster);
-    rasterTrusses(m_raster);
-    rasterFixtures(m_raster);
+    if (gpuFrame == false)
+    {
+        const int ss = (m_dragMode == DragNone && !live) ? 2 : 1;
+        m_raster.begin(width(), height(), ss);
+        m_raster.fillGradient(m_bgTop, m_bgBottom);
+        rasterFloor(m_raster);
+        rasterRoomBox(m_raster);
+        rasterStage(m_raster);
+        rasterTrusses(m_raster);
+        rasterFixtures(m_raster);
+        p.drawImage(0, 0, m_raster.finish());
 
-    p.drawImage(0, 0, m_raster.finish());
+        if (m_fixtureScene != NULL && m_fixtureScene->hazeLevel() > 0.01)
+        {
+            const int alpha = qBound(0, int(m_fixtureScene->hazeLevel() * 55.0), 55);
+            p.fillRect(rect(), QColor(118, 138, 158, alpha));
+        }
+    }
 
     // Soft vignette for depth. It only depends on the widget size, so build
     // it once instead of recalculating a full-screen radial gradient per frame.
@@ -1929,6 +2452,18 @@ void Preview3DView::renderScene(QPainter &p)
     p.drawImage(0, 0, m_vignette);
 
     m_lastFrameMs = m_frameTimer.elapsed();
+
+    m_lastRenderStats.viewport = size();
+    m_lastRenderStats.triangles = gpuFrame ? 0 : m_raster.triangleCount();
+    m_lastRenderStats.lines = gpuFrame ? 0 : m_raster.lineCount();
+    m_lastRenderStats.sprites = gpuFrame ? 0 : m_raster.spriteCount();
+    m_lastRenderStats.fixtures = (m_fixtureScene != NULL)
+                               ? m_fixtureScene->fixtures().count() : 0;
+    m_lastRenderStats.trussSegments = m_occluders.count();
+    m_lastRenderStats.frameMs = m_lastFrameMs;
+    m_lastRenderStats.gpuFrameMs = m_renderBackend != NULL
+            ? m_renderBackend->lastGpuFrameMs() : 0.0;
+    m_lastRenderStats.gpu = gpuFrame;
 
     m_fpsFrames++;
     if (m_fpsTimer.elapsed() >= 500)
@@ -2008,8 +2543,8 @@ bool Preview3DView::pickTruss(const QPoint &screen, int &trussId, double &dist) 
     if (m_scene == NULL)
         return false;
 
-    const double maxD = 12.0;
-    double best = maxD;
+    const double focal = (height() * 0.5) / qTan(m_fovY * 0.5);
+    double best = 1e9;
     bool found = false;
 
     for (const Truss &t : m_scene->trusses())
@@ -2017,27 +2552,28 @@ bool Preview3DView::pickTruss(const QPoint &screen, int &trussId, double &dist) 
         if (!t.visible)
             continue;
 
-        const QList<TrussPort> ports = m_scene->worldPorts(t.id);
-        QList<QPointF> pts;
-        for (const TrussPort &p : ports)
-        {
-            QPointF sp;
-            if (project(p.localPos, sp))
-                pts << sp;
-        }
+        const QVector3D cam = toCamera(t.pos);
+        if (cam.z() < m_near)
+            continue;
 
+        // The clickable band is the visual cross-section, not an arbitrary
+        // large radius around the truss centreline.
+        const double worldRadius = qMax(t.width, t.height) * 0.5;
+        const double screenRadius = worldRadius * focal / qMax(0.05, double(cam.z()));
+        const double threshold = qBound(2.5, screenRadius * 0.9, 22.0);
+
+        const QList<TrussSegment> segments =
+                t.segments(m_scene->linkedPorts(t.id), true);
         double d = 1e9;
-        if (!Truss::isJunction(t.type) && pts.size() >= 2)
+        for (const TrussSegment &seg : segments)
         {
-            d = pointSegmentDist(QPointF(screen), pts.first(), pts.last());
+            QPointF a, b;
+            if (!project(seg.a, a) || !project(seg.b, b))
+                continue;
+            d = qMin(d, pointSegmentDist(QPointF(screen), a, b));
         }
-        else
-        {
-            // Junction (or degenerate): use the projected centre.
-            QPointF sp;
-            if (project(t.pos, sp))
-                d = QLineF(sp, QPointF(screen)).length();
-        }
+        if (d > threshold)
+            continue;
 
         if (d < best)
         {
@@ -2046,6 +2582,7 @@ bool Preview3DView::pickTruss(const QPoint &screen, int &trussId, double &dist) 
             found = true;
         }
     }
+
     if (found)
         dist = best;
     return found;
@@ -2055,7 +2592,7 @@ void Preview3DView::mousePressEvent(QMouseEvent *event)
 {
     m_lastMouse = event->pos();
 
-    // Truss interaction (only while the panel is active).
+    // Editing is only active while the matching panel is open.
     if (m_trussInteractive && event->button() == Qt::LeftButton
         && !(event->modifiers() & Qt::ShiftModifier))
     {
@@ -2093,7 +2630,6 @@ void Preview3DView::mousePressEvent(QMouseEvent *event)
         }
     }
 
-    // Fixture interaction (only while the fixture panel is active).
     if (m_fixtureInteractive && event->button() == Qt::LeftButton
         && !(event->modifiers() & Qt::ShiftModifier))
     {

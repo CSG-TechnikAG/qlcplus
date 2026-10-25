@@ -13,13 +13,23 @@
 #include <QSplitter>
 #include <QToolBar>
 #include <QLabel>
+#include <QComboBox>
 #include <QAction>
 #include <QIcon>
 #include <QSize>
+#include <QDir>
+#include <QFile>
+#include <QFileDialog>
+#include <QMessageBox>
+#include <QSysInfo>
+#include <QTextStream>
 
 #include "preview3d.h"
+#include "qlcconfig.h"
 #include "appicons.h"
 #include "preview3dview.h"
+#include "preview3drenderbackend.h"
+#include "preview3dsettingsdialog.h"
 #include "trusspanel.h"
 #include "trussscene.h"
 #include "fixturepanel.h"
@@ -40,7 +50,12 @@ Preview3D::Preview3D(QWidget *parent, Doc *doc)
     , m_fixtureScene(NULL)
     , m_splitter(NULL)
     , m_infoLabel(NULL)
+    , m_renderStatusLabel(NULL)
     , m_toolbar(NULL)
+    , m_settingsAction(NULL)
+    , m_rendererCombo(NULL)
+    , m_renderBackend(NULL)
+    , m_activeRenderer(Preview3DRenderer::Software)
 {
     QVBoxLayout *layout = new QVBoxLayout(this);
     layout->setContentsMargins(12, 8, 12, 10);
@@ -59,6 +74,17 @@ Preview3D::Preview3D(QWidget *parent, Doc *doc)
     m_toolbar->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
     barLayout->addWidget(m_toolbar);
     layout->addWidget(actionBar);
+
+    m_renderStatusLabel = new QLabel(this);
+    m_renderStatusLabel->setObjectName("preview3dRenderStatus");
+    m_renderStatusLabel->setTextFormat(Qt::PlainText);
+    m_renderStatusLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    m_renderStatusLabel->setContentsMargins(6, 0, 6, 0);
+    m_renderStatusLabel->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+    QPalette statusPalette = m_renderStatusLabel->palette();
+    statusPalette.setColor(QPalette::WindowText, statusPalette.color(QPalette::Link));
+    m_renderStatusLabel->setPalette(statusPalette);
+    layout->addWidget(m_renderStatusLabel);
 
     m_fitAction = m_toolbar->addAction(AppIcons::icon("maximize", 24), tr("Fit to room"));
     m_fitAction->setToolTip(tr("Frame the whole room"));
@@ -91,6 +117,21 @@ Preview3D::Preview3D(QWidget *parent, Doc *doc)
     m_fixtureAction->setCheckable(true);
     m_fixtureAction->setToolTip(tr("Show or hide the fixture placement panel"));
     connect(m_fixtureAction, &QAction::toggled, this, &Preview3D::slotFixtureToggled);
+
+    m_rendererCombo = new QComboBox(m_toolbar);
+    m_rendererCombo->setObjectName("preview3dRendererCombo");
+    m_rendererCombo->addItem(tr("Renderer: Auto"), int(Preview3DRenderer::Auto));
+    if (Preview3DRenderBackendFactory::gpuBackendAvailable())
+        m_rendererCombo->addItem(tr("Renderer: OpenGL"), int(Preview3DRenderer::Gpu));
+    m_rendererCombo->addItem(tr("Renderer: Software"), int(Preview3DRenderer::Software));
+    m_rendererCombo->setToolTip(tr("Select the 3D Preview renderer. The software renderer is always available."));
+    m_toolbar->addWidget(m_rendererCombo);
+    connect(m_rendererCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, &Preview3D::slotRendererChanged);
+
+    m_settingsAction = m_toolbar->addAction(AppIcons::icon("settings-2", 24), QString());
+    m_settingsAction->setToolTip(tr("3D Preview settings and diagnostics"));
+    connect(m_settingsAction, &QAction::triggered, this, &Preview3D::slotSettings);
 
     QWidget *spacer = new QWidget(m_toolbar);
     spacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
@@ -137,12 +178,25 @@ Preview3D::Preview3D(QWidget *parent, Doc *doc)
     if (sg != NULL)
         connect(sg, &StageGeometry::stageChanged, this, &Preview3D::slotGeometryChanged);
 
+    m_renderSettings = Preview3DRenderBackendFactory::loadSettings();
+    rebuildRenderBackend();
+
     refresh();
     s_instance = this;
 }
 
 Preview3D::~Preview3D()
 {
+    if (m_view != NULL)
+        m_view->setRenderBackend(NULL);
+
+    if (m_renderBackend != NULL)
+    {
+        m_renderBackend->shutdown();
+        delete m_renderBackend;
+        m_renderBackend = NULL;
+    }
+
     if (s_instance == this)
         s_instance = NULL;
 }
@@ -170,6 +224,222 @@ void Preview3D::clearContents()
     if (m_view != NULL)
         m_view->resetView();
     m_loading = false;
+}
+
+void Preview3D::slotRendererChanged(int index)
+{
+    if (m_rendererCombo == NULL || index < 0)
+        return;
+
+    const Preview3DRenderer requested =
+            Preview3DRenderer(m_rendererCombo->itemData(index).toInt());
+    if (requested == m_renderSettings.renderer)
+    {
+        updateRenderStatus();
+        return;
+    }
+
+    m_renderSettings.renderer = requested;
+    Preview3DRenderBackendFactory::saveSettings(m_renderSettings);
+    rebuildRenderBackend();
+}
+
+void Preview3D::slotSettings()
+{
+    Preview3DSettingsDialog dialog(m_renderSettings,
+                                   Preview3DRenderBackendFactory::gpuBackendAvailable(),
+                                   diagnosticsText(), this);
+    connect(&dialog, &Preview3DSettingsDialog::capturePreviewRequested,
+            this, &Preview3D::slotCapturePreview);
+    if (dialog.exec() != QDialog::Accepted)
+        return;
+
+    applyRenderSettings(dialog.settings());
+}
+
+void Preview3D::slotCapturePreview()
+{
+    const QString fileName = QFileDialog::getSaveFileName(
+                this, tr("Capture 3D Preview"),
+                QDir::homePath() + QStringLiteral("/qlcplus-preview3d.png"),
+                tr("PNG image (*.png);;All files (*)"));
+    if (fileName.isEmpty())
+        return;
+
+    if (m_view == NULL || m_view->grab().save(fileName, "PNG") == false)
+        QMessageBox::warning(this, tr("Capture 3D Preview"),
+                             tr("Could not save the preview image to %1").arg(fileName));
+}
+
+void Preview3D::applyRenderSettings(const Preview3DRenderSettings &settings)
+{
+    const bool rendererChanged = (settings.renderer != m_renderSettings.renderer);
+    m_renderSettings = settings;
+    Preview3DRenderBackendFactory::saveSettings(m_renderSettings);
+
+    if (rendererChanged || m_renderBackend == NULL)
+    {
+        rebuildRenderBackend();
+        return;
+    }
+
+    if (m_view != NULL)
+    {
+        m_view->setRenderSettings(m_renderSettings);
+        m_view->update();
+    }
+    updateRenderStatus();
+}
+
+void Preview3D::rebuildRenderBackend()
+{
+    if (m_renderBackend != NULL)
+    {
+        m_renderBackend->shutdown();
+        delete m_renderBackend;
+        m_renderBackend = NULL;
+    }
+
+    m_renderDiagnostic.clear();
+    m_renderBackend = Preview3DRenderBackendFactory::createBackend(
+                m_renderSettings, &m_activeRenderer, &m_renderDiagnostic);
+
+    if (m_renderBackend != NULL)
+    {
+        QString error;
+        if (m_renderBackend->initialize(&error) == false)
+        {
+            if (error.isEmpty() == false)
+                m_renderDiagnostic = error;
+
+            /* A requested GPU backend must never leave the Preview blank. */
+            if (m_activeRenderer == Preview3DRenderer::Gpu)
+            {
+                const QString gpuFailure = m_renderDiagnostic;
+                delete m_renderBackend;
+                Preview3DRenderSettings fallbackSettings = m_renderSettings;
+                fallbackSettings.renderer = Preview3DRenderer::Software;
+                m_renderBackend = Preview3DRenderBackendFactory::createBackend(
+                            fallbackSettings, &m_activeRenderer, &m_renderDiagnostic);
+                if (m_renderBackend != NULL)
+                    m_renderBackend->initialize(&error);
+                m_renderDiagnostic = gpuFailure;
+            }
+        }
+    }
+
+    if (m_view != NULL)
+    {
+        m_view->setRenderBackend(m_renderBackend);
+        m_view->setRenderSettings(m_renderSettings);
+        m_view->update();
+    }
+
+    if (m_rendererCombo != NULL)
+    {
+        /* Auto stays Auto even though it currently resolves to software. */
+        const Preview3DRenderer visibleRenderer =
+                (m_renderSettings.renderer == Preview3DRenderer::Auto)
+                ? Preview3DRenderer::Auto : m_activeRenderer;
+        int index = m_rendererCombo->findData(int(visibleRenderer));
+        if (index < 0)
+            index = m_rendererCombo->findData(int(Preview3DRenderer::Software));
+        if (index >= 0)
+        {
+            QSignalBlocker blocker(m_rendererCombo);
+            m_rendererCombo->setCurrentIndex(index);
+        }
+    }
+
+    updateRenderStatus();
+}
+
+void Preview3D::updateRenderStatus()
+{
+    if (m_renderStatusLabel == NULL)
+        return;
+
+    m_renderStatusLabel->setVisible(m_renderSettings.showRenderStatus);
+
+    QString quality = Preview3DRenderBackendFactory::qualityToString(m_renderSettings.quality);
+    if (quality.isEmpty() == false)
+        quality[0] = quality[0].toUpper();
+    QString text;
+    if (m_renderBackend == NULL)
+    {
+        text = tr("Renderer unavailable - software fallback is used");
+    }
+    else
+    {
+        text = tr("%1  \u00b7  %2  \u00b7  %3%")
+                .arg(m_renderBackend->displayName(), quality)
+                .arg(qRound(m_renderSettings.resolutionScale * 100.0));
+        if (m_renderSettings.renderer == Preview3DRenderer::Auto)
+            text += tr("  \u00b7  Auto");
+        else if (m_renderSettings.renderer == Preview3DRenderer::Gpu &&
+                 m_activeRenderer != Preview3DRenderer::Gpu)
+            text += tr("  \u00b7  GPU fallback");
+        if (m_renderDiagnostic.isEmpty() == false)
+            text += tr("  \u00b7  %1").arg(m_renderDiagnostic);
+    }
+    m_renderStatusLabel->setText(text);
+    m_renderStatusLabel->setToolTip(diagnosticsText());
+}
+
+QString Preview3D::diagnosticsText() const
+{
+    QStringList lines;
+    lines << QStringLiteral("%1 %2").arg(QStringLiteral(APPNAME), QStringLiteral(APPVERSION));
+    lines << QStringLiteral("Qt %1 on %2").arg(QString::fromLatin1(qVersion()),
+                                                 QSysInfo::prettyProductName());
+    lines << tr("Requested renderer: %1")
+             .arg(Preview3DRenderBackendFactory::rendererToString(m_renderSettings.renderer));
+    lines << tr("Active renderer: %1")
+             .arg(m_renderBackend != NULL ? m_renderBackend->displayName()
+                                          : tr("unavailable"));
+    lines << tr("Fallback reason: %1")
+             .arg(m_renderDiagnostic.isEmpty() ? tr("none") : m_renderDiagnostic);
+    lines << tr("OpenGL available: %1")
+             .arg(Preview3DRenderBackendFactory::gpuBackendAvailable() ? tr("yes") : tr("no"));
+    lines << tr("Quality: %1, resolution %2%, shadows %3, haze %4")
+             .arg(Preview3DRenderBackendFactory::qualityToString(m_renderSettings.quality))
+             .arg(qRound(m_renderSettings.resolutionScale * 100.0))
+             .arg(m_renderSettings.shadows ? tr("on") : tr("off"))
+             .arg(m_renderSettings.haze ? tr("on") : tr("off"));
+
+    if (m_renderBackend != NULL)
+    {
+        const Preview3DRenderCapabilities caps = m_renderBackend->capabilities();
+        lines << tr("Capabilities: accelerated=%1 shadows=%2 haze=%3 volumetricBeams=%4 msaa=%5")
+                 .arg(caps.accelerated ? tr("yes") : tr("no"))
+                 .arg(caps.shadows ? tr("yes") : tr("no"))
+                 .arg(caps.haze ? tr("yes") : tr("no"))
+                 .arg(caps.volumetricBeams ? tr("yes") : tr("no"))
+                 .arg(caps.maxSupersample);
+        lines << tr("GPU frame time: %1 ms").arg(m_renderBackend->lastGpuFrameMs(), 0, 'f', 2);
+        lines << tr("Static uploads: %1, shadow-map renders: %2")
+                 .arg(m_renderBackend->staticUploadCount())
+                 .arg(m_renderBackend->shadowRenderCount());
+        if (m_renderBackend->diagnostics().isEmpty() == false)
+            lines << m_renderBackend->diagnostics();
+    }
+
+    if (m_view != NULL)
+    {
+        const Preview3DRenderStats stats = m_view->lastRenderStats();
+        lines << tr("Viewport: %1x%2; frame %3 ms; GPU=%4; triangles %5, lines %6, sprites %7")
+                 .arg(stats.viewport.width())
+                 .arg(stats.viewport.height())
+                 .arg(stats.frameMs, 0, 'f', 2)
+                 .arg(stats.gpu ? tr("yes") : tr("no"))
+                 .arg(stats.triangles)
+                 .arg(stats.lines)
+                 .arg(stats.sprites);
+        lines << tr("Fixtures: %1; truss segments: %2")
+                 .arg(stats.fixtures).arg(stats.trussSegments);
+    }
+
+    return lines.join(QStringLiteral("\n"));
 }
 
 void Preview3D::slotTrussSceneChanged()
@@ -328,7 +598,13 @@ void Preview3D::slotTrussToggled(bool on)
     if (m_trussPanel != NULL)
         m_trussPanel->setVisible(on);
     if (m_view != NULL)
+    {
         m_view->setTrussInteractive(on);
+        if (!on)
+            m_view->setSelectedTruss(-1);
+    }
+    if (!on && m_trussPanel != NULL)
+        m_trussPanel->setSelectedId(-1);
 
     // Truss and fixture modes are mutually exclusive.
     if (on && m_fixtureAction != NULL && m_fixtureAction->isChecked())
@@ -340,7 +616,13 @@ void Preview3D::slotFixtureToggled(bool on)
     if (m_fixturePanel != NULL)
         m_fixturePanel->setVisible(on);
     if (m_view != NULL)
+    {
         m_view->setFixtureInteractive(on);
+        if (!on)
+            m_view->setSelectedFixture(-1);
+    }
+    if (!on && m_fixturePanel != NULL)
+        m_fixturePanel->setSelectedId(-1);
 
     if (on && m_trussAction != NULL && m_trussAction->isChecked())
         m_trussAction->setChecked(false);
@@ -371,5 +653,15 @@ void Preview3D::refresh()
             .arg(st.sx(), 0, 'f', 2)
             .arg(st.sy(), 0, 'f', 2)
             .arg(sg->stageHeight(), 0, 'f', 2));
+
+        if (m_renderBackend != NULL)
+        {
+            QString tip = tr("Renderer: %1\nQuality: %2")
+                    .arg(m_renderBackend->displayName())
+                    .arg(Preview3DRenderBackendFactory::qualityToString(m_renderSettings.quality));
+            if (m_renderDiagnostic.isEmpty() == false)
+                tip += QString("\n") + m_renderDiagnostic;
+            m_infoLabel->setToolTip(tip);
+        }
     }
 }

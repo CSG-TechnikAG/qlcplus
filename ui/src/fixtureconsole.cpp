@@ -26,6 +26,7 @@
 #include "consolechannel.h"
 #include "fixture.h"
 #include "apputil.h"
+#include "theme.h"
 #include "doc.h"
 
 /*****************************************************************************
@@ -47,19 +48,28 @@ FixtureConsole::FixtureConsole(QWidget *parent, Doc *doc, GroupType type, bool s
 
     int topMargin = m_showCheckBoxes ? 16 : 1;
 
-    QString ssFcCommon = "QGroupBox::title {top:-15px; left: 12px; subcontrol-origin: border; background-color: transparent; } "
+    Theme *theme = Theme::instance();
+    QString ssFcCommon = "QGroupBox::title {top:-15px; left: 12px; subcontrol-origin: border; background-color: transparent; color: %1; } "
                          "QGroupBox::indicator { width: 18px; height: 18px; } "
                          "QGroupBox::indicator:checked { image: url(:/checkbox_full.png) } "
                          "QGroupBox::indicator:unchecked { image: url(:/checkbox_empty.png) }";
+    ssFcCommon = ssFcCommon.arg(theme->color(Theme::Text).name());
 
-    QString ssFcEven = "QGroupBox { background-color: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #C3D1C9, stop: 1 #AFBBB4); "
-                       "border: 1px solid gray; border-radius: 4px; margin-top: %1px; margin-right: 1px; } ";
-
-    QString ssFcOdd = "QGroupBox { background-color: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #D6D5E0, stop: 1 #A7A6AF); "
-                      "border: 1px solid gray; border-radius: 4px; margin-top: %1px; margin-right: 1px; } ";
-
-    QString ssFcNone = "QGroupBox { background-color: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #D6D2D0, stop: 1 #AFACAB); "
-                       "border: 1px solid gray; border-radius: 4px; margin-top: %1px; margin-right: 1px; } ";
+    const QString groupCss = "QGroupBox { background-color: %1; border: 1px solid %2; "
+                             "border-radius: 8px; color: %3; margin-top: %4px; "
+                             "margin-right: 1px; padding: 3px 2px 2px 2px; } ";
+    QString ssFcEven = groupCss.arg(theme->color(Theme::SurfaceRaised).name(),
+                                    theme->color(Theme::Border).name(),
+                                    theme->color(Theme::Text).name())
+            + ssFcCommon;
+    QString ssFcOdd = groupCss.arg(theme->color(Theme::Surface).name(),
+                                   theme->color(Theme::Border).name(),
+                                   theme->color(Theme::Text).name())
+            + ssFcCommon;
+    QString ssFcNone = groupCss.arg(theme->color(Theme::Background).name(),
+                                    theme->color(Theme::Border).name(),
+                                    theme->color(Theme::Text).name())
+            + ssFcCommon;
 
     QString userStyle = AppUtil::getStyleSheet("FIXTURE_CONSOLE_COMMON");
     if (!userStyle.isEmpty())
@@ -70,21 +80,21 @@ FixtureConsole::FixtureConsole(QWidget *parent, Doc *doc, GroupType type, bool s
         userStyle = AppUtil::getStyleSheet("FIXTURE_CONSOLE_EVEN");
         if (!userStyle.isEmpty())
             ssFcEven = userStyle;
-        m_styleSheet = QString(ssFcEven + (m_showCheckBoxes ? ssFcCommon : "")).arg(topMargin);
+        m_styleSheet = ssFcEven.arg(topMargin);
     }
     else if (m_groupType == GroupOdd)
     {
         userStyle = AppUtil::getStyleSheet("FIXTURE_CONSOLE_ODD");
         if (!userStyle.isEmpty())
             ssFcOdd = userStyle;
-        m_styleSheet = QString(ssFcOdd + (m_showCheckBoxes ? ssFcCommon : "")).arg(topMargin);
+        m_styleSheet = ssFcOdd.arg(topMargin);
     }
     else
     {
         userStyle = AppUtil::getStyleSheet("FIXTURE_CONSOLE_NORMAL");
         if (!userStyle.isEmpty())
             ssFcNone = userStyle;
-        m_styleSheet = QString(ssFcNone + (m_showCheckBoxes ? ssFcCommon : "")).arg(topMargin);
+        m_styleSheet = ssFcNone.arg(topMargin);
     }
 }
 

@@ -115,6 +115,14 @@ void FixturePanel::setSelectedId(int id)
 {
     if (m_scene == NULL)
         return;
+    if (id < 0)
+    {
+        m_updating++;
+        m_list->setCurrentRow(-1);
+        m_updating--;
+        loadFields();
+        return;
+    }
     for (int i = 0; i < m_scene->fixtures().size(); ++i)
     {
         if ((int)m_scene->fixtures().at(i).id == id)

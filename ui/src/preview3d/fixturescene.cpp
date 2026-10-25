@@ -131,6 +131,43 @@ FixtureInstance *FixtureScene::instance(quint32 id)
     return (i >= 0) ? &m_fixtures[i] : NULL;
 }
 
+static bool smokeHasLightSource(Fixture *fx)
+{
+    if (fx == NULL)
+        return false;
+
+    QLCPhysical ph;
+    if (fx->fixtureMode() != NULL)
+        ph = fx->fixtureMode()->physical();
+    if (ph.isEmpty() && fx->fixtureDef() != NULL)
+        ph = fx->fixtureDef()->physical();
+    const QString bulb = ph.bulbType().trimmed().toLower();
+    if (bulb.contains(QStringLiteral("led")) || bulb.contains(QStringLiteral("laser")) ||
+        bulb.contains(QStringLiteral("halogen")) || bulb.contains(QStringLiteral("discharge")))
+        return true;
+
+    for (quint32 i = 0; i < fx->channels(); ++i)
+    {
+        const QLCChannel *channel = fx->channel(i);
+        if (channel == NULL)
+            continue;
+        const QString name = channel->name().toLower();
+        if (channel->group() == QLCChannel::Colour ||
+            channel->colour() != QLCChannel::NoColour)
+            return true;
+        if (name.contains(QStringLiteral("led")) ||
+            name.contains(QStringLiteral("light")) ||
+            name.contains(QStringLiteral("lamp")) ||
+            name.contains(QStringLiteral("strobe")))
+            return true;
+        if (channel->group() == QLCChannel::Intensity &&
+            (name.contains(QStringLiteral("dimmer")) ||
+             name.contains(QStringLiteral("master"))))
+            return true;
+    }
+    return false;
+}
+
 void FixtureScene::updateModel(FixtureInstance &fi, Fixture *fx)
 {
     switch (fx->type())
@@ -169,7 +206,16 @@ void FixtureScene::updateModel(FixtureInstance &fi, Fixture *fx)
         break;
     }
 
-    fi.hazer = (fx->type() == QLCFixtureDef::Hazer);
+    QString smokeLabel = fx->name().toLower();
+    if (fx->fixtureDef() != NULL)
+        smokeLabel += QLatin1Char(' ') + fx->fixtureDef()->model().toLower();
+    // Some hazer definitions are filed as generic Smoke in older fixture packs.
+    fi.hazer = (fx->type() == QLCFixtureDef::Hazer) ||
+               smokeLabel.contains(QStringLiteral("haze"));
+    fi.hasLight = (fi.model != FixtureModel::Smoke) ? true : smokeHasLightSource(fx);
+    fi.lightColor = fi.color;
+    fi.lightIntensity = 1.0;
+    fi.smokeIntensity = 1.0;
 
     QLCPhysical ph;
     // The mode's physical is authoritative for an instance (it carries the LED
@@ -321,7 +367,7 @@ void FixtureScene::rebuild()
             fi.id = fx->id();
             fi.name = fx->name();
             fi.color = (fx->type() == QLCFixtureDef::Dimmer)
-                     ? QColor(235, 225, 195) : QColor(190, 215, 255);
+                     ? QColor(235, 225, 195) : QColor(232, 232, 228);
             updateModel(fi, fx);
             readFromMonitor(fi);
 
@@ -374,7 +420,11 @@ void FixtureScene::rebuild()
     {
         m_smokeTimer->stop();
         if (!hasSmoke)
+        {
             m_smoke.clear();
+            m_hazeLevel = 0.0;
+            m_fogLevel = 0.0;
+        }
     }
 
     if (m_live)
@@ -653,6 +703,63 @@ void FixtureScene::updateLive()
         fi.livePan = pan;
         fi.liveTilt = tilt;
 
+        if (fi.model == FixtureModel::Smoke)
+        {
+            double smokeIntensity = 0.0;
+            bool foundOutput = false;
+            for (quint32 c = 0; c < fx->channels() && int(c) < v.size(); ++c)
+            {
+                const QLCChannel *ch = fx->channel(c);
+                if (ch == NULL)
+                    continue;
+                const QString name = ch->name().toLower();
+                if (name.contains(QStringLiteral("fog")) ||
+                    name.contains(QStringLiteral("haze")) ||
+                    name.contains(QStringLiteral("output")) ||
+                    name.contains(QStringLiteral("pump")) ||
+                    name.contains(QStringLiteral("volume")))
+                {
+                    smokeIntensity = qMax(smokeIntensity, double(uchar(v.at(c))) / 255.0);
+                    foundOutput = true;
+                }
+            }
+            fi.smokeIntensity = foundOutput ? smokeIntensity : inten;
+        }
+
+        if (fi.model == FixtureModel::Smoke && fi.hasLight)
+        {
+            QColor lightColor = computeHeadColor(fx, 0, v, fi.color);
+            double lightIntensity = 0.0;
+            bool foundDimmer = false;
+            for (quint32 c = 0; c < fx->channels() && int(c) < v.size(); ++c)
+            {
+                const QLCChannel *ch = fx->channel(c);
+                if (ch == NULL || ch->group() != QLCChannel::Intensity)
+                    continue;
+                const QString name = ch->name().toLower();
+                if (name.contains(QStringLiteral("fog")) ||
+                    name.contains(QStringLiteral("haze")) ||
+                    name.contains(QStringLiteral("output")) ||
+                    name.contains(QStringLiteral("pump")) ||
+                    name.contains(QStringLiteral("volume")) ||
+                    name.contains(QStringLiteral("fan")) ||
+                    name.contains(QStringLiteral("duration")) ||
+                    name.contains(QStringLiteral("interval")) ||
+                    name.contains(QStringLiteral("speed")))
+                    continue;
+                lightIntensity = qMax(lightIntensity, double(uchar(v.at(c))) / 255.0);
+                foundDimmer = true;
+            }
+            if (foundDimmer == false)
+            {
+                lightIntensity = qMax(lightColor.redF(),
+                                      qMax(lightColor.greenF(), lightColor.blueF()));
+            }
+            fi.lightColor = lightColor;
+            fi.lightIntensity = lightIntensity;
+            fi.liveColor = lightColor;
+        }
+
         // Per-head colour/intensity (LED bars and matrices).
         fi.liveHeads.clear();
         fi.liveHeadIntensity.clear();
@@ -708,9 +815,17 @@ void FixtureScene::setLive(bool on)
         }
     }
     if (on && hasSmoke)
+    {
         m_smokeTimer->start();
+    }
     else
+    {
         m_smokeTimer->stop();
+        m_hazeLevel = 0.0;
+        m_fogLevel = 0.0;
+        if (!on)
+            m_smoke.clear();
+    }
 
     updateLive();
 }
@@ -746,10 +861,29 @@ void FixtureScene::updateSmoke(double dt)
 {
     if (dt <= 0.0)
         return;
+    dt = qBound(0.001, dt, 0.1);
 
     StageGeom::Room room(0, 1, 0, 1, 0, 4);
+    double stageX = 0.0, stageY = 0.0;
     if (StageGeometry::instance() != NULL)
+    {
         room = StageGeometry::instance()->room();
+        const StageGeom::Stage stage = StageGeometry::instance()->stage();
+        stageX = stage.sx();
+        stageY = stage.sy();
+    }
+    const double floorZ = room.minZ();
+    const double ceilingZ = room.maxZ();
+
+    auto rnd = []() { return QRandomGenerator::global()->generateDouble() - 0.5; };
+    auto noise = [](double seed, double age) {
+        return QVector3D(qSin(seed + age * 1.31),
+                         qCos(seed * 1.73 + age * 0.87),
+                         qSin(seed * 0.61 + age * 1.17) * 0.35);
+    };
+
+    double targetHaze = 0.0;
+    double targetFog = 0.0;
 
     for (FixtureInstance &fi : m_fixtures)
     {
@@ -758,7 +892,14 @@ void FixtureScene::updateSmoke(double dt)
 
         SmokeState &st = m_smoke[fi.id];
         const bool hazer = fi.hazer;
-        const double inten = fi.live ? fi.liveIntensity : 0.45;
+        const double inten = fi.live ? fi.smokeIntensity : 0.0;
+        if (hazer)
+            targetHaze = qMax(targetHaze, inten);
+        else
+            targetFog = qMax(targetFog, inten);
+
+        if (inten <= 0.005)
+            st.accum = 0.0;
 
         const QQuaternion rot = QQuaternion::fromAxisAndAngle(QVector3D(0.0, 0.0, 1.0), fi.yaw)
                               * QQuaternion::fromAxisAndAngle(QVector3D(1.0, 0.0, 0.0), fi.pitch);
@@ -767,11 +908,14 @@ void FixtureScene::updateSmoke(double dt)
         const QVector3D nozzle = fi.pos + rot.rotatedVector(QVector3D(0.0, sy * 0.5 + sy * 0.16, sz * 0.26));
         const QVector3D dir = rot.rotatedVector(QVector3D(0.0, 1.0, 0.0));
 
-        auto rnd = []() { return QRandomGenerator::global()->generateDouble() - 0.5; };
-
-        // Emission rate scales with the machine's intensity.
-        const double rate = (hazer ? 6.0 : 20.0) * inten;
-        const int maxParticles = hazer ? 45 : 65;
+        // Haze is a fine, nearly continuous atmospheric layer. Fog/smoke is
+        // emitted in much denser billows that fall and spread across the floor.
+        const double rate = (hazer ? 1.4 : 32.0) * inten;
+        const int maxParticles = qMax(1, int((hazer ? 22.0 : 110.0) * inten));
+        const double thrust = hazer ? (0.10 + 0.20 * inten)
+                                    : (0.80 + 4.60 * inten);
+        if (inten > 0.005)
+        {
         st.accum += rate * dt;
         while (st.accum >= 1.0)
         {
@@ -782,16 +926,31 @@ void FixtureScene::updateSmoke(double dt)
                 break;
             }
             SmokeParticle p;
-            p.pos = nozzle + QVector3D(rnd() * 0.06, rnd() * 0.06, rnd() * 0.06);
-            const double spread = hazer ? 0.12 : 0.30;
-            p.vel = dir * (hazer ? 0.35 : 1.5)
-                  + QVector3D(rnd() * spread, rnd() * spread, rnd() * spread + (hazer ? 0.10 : 0.35));
-            p.age = 0.0;
-            p.life = hazer ? 14.0 : 4.5;
+            p.pos = nozzle + QVector3D(rnd() * 0.045, rnd() * 0.045, rnd() * 0.045);
+            p.seed = QRandomGenerator::global()->generateDouble() * 20.0;
+            p.haze = hazer;
+            if (hazer)
+            {
+                p.color = QColor(176, 186, 199);
+                p.size = 0.7 + QRandomGenerator::global()->generateDouble() * 0.35;
+                p.life = 10.0 + QRandomGenerator::global()->generateDouble() * 6.0;
+                const double spread = 0.10;
+                p.vel = dir * thrust * (0.85 + QRandomGenerator::global()->generateDouble() * 0.3)
+                      + QVector3D(rnd() * spread, rnd() * spread, 0.025 + rnd() * 0.03);
+            }
+            else
+            {
+                p.color = QColor(174, 180, 187);
+                p.size = 0.12 + QRandomGenerator::global()->generateDouble() * 0.09;
+                p.life = 7.0 + QRandomGenerator::global()->generateDouble() * 4.0;
+                const double spread = 0.72;
+                p.vel = dir * thrust * (0.82 + QRandomGenerator::global()->generateDouble() * 0.36)
+                      + QVector3D(rnd() * spread, rnd() * spread, -0.08 + rnd() * 0.10);
+            }
             st.particles << p;
         }
+        }
 
-        // Timed decay: grow, rise and fade out.
         for (int i = st.particles.size() - 1; i >= 0; --i)
         {
             SmokeParticle &p = st.particles[i];
@@ -801,23 +960,77 @@ void FixtureScene::updateSmoke(double dt)
                 st.particles.removeAt(i);
                 continue;
             }
-            const double u = p.age / p.life;
-            p.vel += QVector3D(0.0, 0.0, hazer ? 0.10 : 0.30) * dt;   // buoyancy
-            p.vel *= (hazer ? 0.997 : 0.985);                          // drag
+
+            const double u = qBound(0.0, p.age / p.life, 1.0);
+            const QVector3D turbulent = noise(p.seed, p.age);
+            if (p.haze)
+            {
+                p.size = 0.7 + 3.2 * (1.0 - qExp(-2.6 * u));
+                p.alpha = 0.042 * qPow(1.0 - u, 0.7);
+                p.vel += turbulent * (0.012 * dt);
+                p.vel.setZ(p.vel.z() + 0.018 * dt);
+                p.vel *= 0.997;
+            }
+            else
+            {
+                p.size = 0.14 + 1.55 * (1.0 - qExp(-2.2 * u));
+                p.alpha = 0.12 * qPow(1.0 - u, 1.05);
+                p.vel += turbulent * (0.72 * dt);
+                p.vel.setZ(p.vel.z() - 0.12 * dt);   // cool fog settles
+                p.vel *= 0.965;
+            }
+
             p.pos += p.vel * dt;
 
-            const double size0 = hazer ? 0.40 : 0.18;
-            const double size1 = hazer ? 3.00 : 1.10;
-            p.size = size0 + (size1 - size0) * u;
-            const double a0 = hazer ? 0.14 : 0.70;
-            p.alpha = a0 * (1.0 - u);
-
-            // Keep puffs inside the room.
-            p.pos.setX(float(qBound(room.minX() + 0.1, double(p.pos.x()), room.maxX() - 0.1)));
-            p.pos.setY(float(qBound(room.minY() + 0.1, double(p.pos.y()), room.maxY() - 0.1)));
-            p.pos.setZ(float(qBound(room.minZ() + 0.1, double(p.pos.z()), room.maxZ() - 0.1)));
+            // Contain the puff radius, not just its centre, so billboards do
+            // not leak through the room boundaries or the stage deck.
+            const double margin = qMax(0.03, p.size * 0.75);
+            const bool overStage = stageX > 0.0 && stageY > 0.0 &&
+                                   p.pos.x() >= 0.0 && p.pos.x() <= stageX &&
+                                   p.pos.y() >= 0.0 && p.pos.y() <= stageY;
+            const double ground = overStage ? 0.0 : floorZ;
+            if (p.pos.z() - margin < ground)
+            {
+                p.pos.setZ(float(ground + margin));
+                if (p.vel.z() < 0.0)
+                    p.vel.setZ(-p.vel.z() * 0.18);
+                p.vel.setX(p.vel.x() * 0.97);
+                p.vel.setY(p.vel.y() * 0.97);
+            }
+            if (p.pos.z() + margin > ceilingZ)
+            {
+                p.pos.setZ(float(ceilingZ - margin));
+                if (p.vel.z() > 0.0)
+                    p.vel.setZ(-p.vel.z() * 0.2);
+            }
+            if (p.pos.x() - margin < room.minX())
+            {
+                p.pos.setX(float(room.minX() + margin));
+                p.vel.setX(qAbs(p.vel.x()) * 0.25);
+            }
+            else if (p.pos.x() + margin > room.maxX())
+            {
+                p.pos.setX(float(room.maxX() - margin));
+                p.vel.setX(-qAbs(p.vel.x()) * 0.25);
+            }
+            if (p.pos.y() - margin < room.minY())
+            {
+                p.pos.setY(float(room.minY() + margin));
+                p.vel.setY(qAbs(p.vel.y()) * 0.25);
+            }
+            else if (p.pos.y() + margin > room.maxY())
+            {
+                p.pos.setY(float(room.maxY() - margin));
+                p.vel.setY(-qAbs(p.vel.y()) * 0.25);
+            }
         }
     }
+
+    // Haze lingers and fills the volume; fog is denser and more local. Smooth
+    // both so switching a machine on/off does not pop the atmosphere.
+    const double smooth = qMin(1.0, dt * 0.35);
+    m_hazeLevel += (targetHaze - m_hazeLevel) * smooth;
+    m_fogLevel += (targetFog - m_fogLevel) * smooth;
 
     // Drop states for fixtures that are no longer smoke machines.
     for (auto it = m_smoke.begin(); it != m_smoke.end(); )

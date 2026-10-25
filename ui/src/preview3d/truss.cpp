@@ -171,6 +171,33 @@ static void addBoxEdges(QList<TrussSegment> &segs, double hx, double hy, double 
         segs << TrussSegment{ c[e[i][0]], c[e[i][1]], true };
 }
 
+static QList<QPointF> profileChords(Truss::Type profile, double width, double height)
+{
+    QList<QPointF> chords;
+    const double w = qMax(0.05, width);
+    const double h = qMax(0.05, height);
+    switch (profile)
+    {
+    case Truss::Triangle:
+        chords << QPointF(-w * 0.5, -h * 0.5)
+               << QPointF( w * 0.5, -h * 0.5)
+               << QPointF( 0.0,        h * 0.5);
+        break;
+    case Truss::Ladder:
+        chords << QPointF(0.0, -h * 0.5)
+               << QPointF(0.0,  h * 0.5);
+        break;
+    case Truss::Box:
+    default:
+        chords << QPointF(-w * 0.5, -h * 0.5)
+               << QPointF( w * 0.5, -h * 0.5)
+               << QPointF( w * 0.5,  h * 0.5)
+               << QPointF(-w * 0.5,  h * 0.5);
+        break;
+    }
+    return chords;
+}
+
 /** Straight truss geometry in local coordinates (centred, along X). */
 static QList<TrussSegment> straightLocal(Truss::Type type, double length,
                                          double width, double height, double bayLength)
@@ -265,28 +292,70 @@ QList<TrussSegment> Truss::segments(const QSet<int> &linkedPorts, bool onlyLinke
 
     if (isJunction(type))
     {
-        // Each port gets a short truss stub of the junction's own profile,
-        // reaching from the centre outwards so the pieces join up cleanly.
-        // With $onlyLinkedPorts, unconnected sides are left empty.
+        // Build a node cage from the ports that are actually connected. This
+        // makes 2-way, 3-way and multi-way junctions grow the right branches
+        // instead of drawing preset, overlapping truss stubs.
         const double ns = qMax(0.08, width * 0.5);
-        const double L = ns + 0.30;
+        const double hub = qMax(0.045, ns * 0.58);
         const QList<TrussPort> ports = localPorts();
+        const QList<QPointF> chords = profileChords(profile, width, height);
+
+        QVector3D hubCorners[8] = {
+            QVector3D(-hub, -hub, -hub), QVector3D( hub, -hub, -hub),
+            QVector3D( hub,  hub, -hub), QVector3D(-hub,  hub, -hub),
+            QVector3D(-hub, -hub,  hub), QVector3D( hub, -hub,  hub),
+            QVector3D( hub,  hub,  hub), QVector3D(-hub,  hub,  hub)
+        };
+
+        int activePorts = 0;
         for (int i = 0; i < ports.size(); ++i)
         {
             if (onlyLinkedPorts && !linkedPorts.contains(i))
                 continue;
+            ++activePorts;
 
-            const TrussPort &p = ports.at(i);
-            const QList<TrussSegment> sub = straightLocal(profile, L, width, height, bayLength);
-            const QQuaternion r = QQuaternion::rotationTo(QVector3D(1.0, 0.0, 0.0), p.localDir);
-            const QVector3D center = p.localDir * (L * 0.5);
-            for (const TrussSegment &s : sub)
-                segs << TrussSegment{ r.rotatedVector(s.a) + center,
-                                      r.rotatedVector(s.b) + center, s.chord };
+            const TrussPort &port = ports.at(i);
+            const QVector3D dir = port.localDir.normalized();
+            const QQuaternion r = QQuaternion::rotationTo(QVector3D(1, 0, 0), dir);
+            const QVector3D centre = dir * ns;
+
+            QVector3D ring[8];
+            const int n = chords.size();
+            for (int c = 0; c < n; ++c)
+            {
+                const QPointF &off = chords.at(c);
+                ring[c] = centre + r.rotatedVector(QVector3D(0, off.x(), off.y()));
+            }
+
+            // Port end frame: joins the connected truss's own end frame.
+            for (int c = 0; c < n; ++c)
+                segs << TrussSegment{ ring[c], ring[(c + 1) % n], true };
+
+            // Radial gusset chords into the nearest hub corner. Using the
+            // actual profile corners keeps box, triangle and ladder junctions
+            // visually consistent with the truss that feeds them.
+            for (int c = 0; c < n; ++c)
+            {
+                int nearest = 0;
+                double best = 1e9;
+                for (int h = 0; h < 8; ++h)
+                {
+                    const double d = (ring[c] - hubCorners[h]).lengthSquared();
+                    if (d < best)
+                    {
+                        best = d;
+                        nearest = h;
+                    }
+                }
+                segs << TrussSegment{ ring[c], hubCorners[nearest], false };
+            }
         }
 
-        // Small centre node, so an unconnected junction is still visible.
-        addBoxEdges(segs, ns * 0.45, ns * 0.45, ns * 0.45);
+        // The hub is always visible for an unconnected junction and forms the
+        // central load-bearing node for connected ones.
+        addBoxEdges(segs, hub, hub, hub);
+        if (activePorts == 0)
+            addBoxEdges(segs, ns * 0.35, ns * 0.35, ns * 0.35);
     }
     else
     {

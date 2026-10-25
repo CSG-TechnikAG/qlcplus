@@ -47,6 +47,9 @@ void SoftwareRaster::begin(int width, int height, int supersample)
     /* The gradient always covers the full image, so no separate clear is
      * needed here. */
     m_depth.fill(0.0f);   // 0 = infinitely far (invW)
+    m_triangles = 0;
+    m_lines = 0;
+    m_sprites = 0;
 }
 
 void SoftwareRaster::fillGradient(const QColor &top, const QColor &bottom)
@@ -75,6 +78,7 @@ void SoftwareRaster::triangle(const QPointF &p0, const QPointF &p1, const QPoint
     if (m_w <= 0 || m_h <= 0 || color.alpha() <= 0)
         return;
 
+    ++m_triangles;
     const double x0 = p0.x() * m_ss, y0 = p0.y() * m_ss;
     const double x1 = p1.x() * m_ss, y1 = p1.y() * m_ss;
     const double x2 = p2.x() * m_ss, y2 = p2.y() * m_ss;
@@ -160,6 +164,7 @@ void SoftwareRaster::triangle(const QPointF &p0, const QPointF &p1, const QPoint
 void SoftwareRaster::line(const QPointF &p0, const QPointF &p1, double iw0, double iw1,
                           const QColor &color, double width)
 {
+    ++m_lines;
     QPointF d = p1 - p0;
     const double len = qSqrt(d.x() * d.x() + d.y() * d.y());
     const double h = qMax(0.5, width) * 0.5;
@@ -211,6 +216,7 @@ void SoftwareRaster::sprite(const QPointF &center, double iw, double radius, con
     if (m_w <= 0 || m_h <= 0 || radius < 0.5 || color.alpha() <= 0)
         return;
 
+    ++m_sprites;
     const double cx = center.x() * m_ss;
     const double cy = center.y() * m_ss;
     const double r = radius * m_ss;

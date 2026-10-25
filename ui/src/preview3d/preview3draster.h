@@ -59,6 +59,11 @@ public:
     /** Additive blending (for light beams: overlapping colours add up). */
     void setAdditive(bool on) { m_additive = on; }
 
+    /** Counters exposed for the M0 performance baseline. */
+    int triangleCount() const { return m_triangles; }
+    int lineCount() const { return m_lines; }
+    int spriteCount() const { return m_sprites; }
+
 private:
     int m_ss;
     int m_w, m_h;                 // supersampled dimensions
@@ -66,6 +71,9 @@ private:
     QVector<float> m_depth;
     bool m_depthWrite;
     bool m_additive;
+    int m_triangles = 0;
+    int m_lines = 0;
+    int m_sprites = 0;
 };
 
 #endif // PREVIEW3DRASTER_H

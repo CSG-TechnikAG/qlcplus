@@ -18,6 +18,8 @@
 
 #include <QWidget>
 
+#include "preview3drenderbackend.h"
+
 #define KXMLQLCPreview3D          QStringLiteral("Preview3D")
 
 class Preview3DView;
@@ -29,9 +31,11 @@ class QLabel;
 class QToolBar;
 class QAction;
 class QSplitter;
+class QComboBox;
 class QXmlStreamReader;
 class QXmlStreamWriter;
 class Doc;
+class Preview3DRenderBackend;
 
 /** @addtogroup ui_preview3d UI
  * @{
@@ -72,9 +76,16 @@ private slots:
     void slotFixtureToggled(bool on);
     void slotTrussSceneChanged();
     void slotFixtureSceneChanged();
+    void slotRendererChanged(int index);
+    void slotSettings();
+    void slotCapturePreview();
 
 private:
     void refresh();
+    void applyRenderSettings(const Preview3DRenderSettings &settings);
+    void rebuildRenderBackend();
+    void updateRenderStatus();
+    QString diagnosticsText() const;
 
     static Preview3D *s_instance;
     Doc *m_doc;
@@ -86,6 +97,7 @@ private:
     FixtureScene *m_fixtureScene;
     QSplitter *m_splitter;
     QLabel *m_infoLabel;
+    QLabel *m_renderStatusLabel;
     QToolBar *m_toolbar;
     QAction *m_fitAction;
     QAction *m_resetAction;
@@ -93,6 +105,12 @@ private:
     QAction *m_beamPreviewAction;
     QAction *m_trussAction;
     QAction *m_fixtureAction;
+    QAction *m_settingsAction;
+    QComboBox *m_rendererCombo;
+    Preview3DRenderSettings m_renderSettings;
+    Preview3DRenderBackend *m_renderBackend;
+    Preview3DRenderer m_activeRenderer;
+    QString m_renderDiagnostic;
 };
 
 /** @} */

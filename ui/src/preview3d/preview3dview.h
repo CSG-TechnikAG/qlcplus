@@ -30,6 +30,8 @@
 #include <QElapsedTimer>
 
 #include "preview3draster.h"
+#include "preview3dsceneframe.h"
+#include "preview3drenderbackend.h"
 
 class QPainter;
 class TrussScene;
@@ -87,6 +89,13 @@ public:
 
     /** Fixtures to render. */
     void setFixtureScene(FixtureScene *scene);
+
+    /** Select the active render backend. NULL or a software backend keeps the
+     *  direct software path. */
+    void setRenderBackend(Preview3DRenderBackend *backend);
+
+    /** Shadow/haze options used by GPU scene snapshots. */
+    void setRenderSettings(const Preview3DRenderSettings &settings);
     /** Enable/disable fixture picking and dragging. */
     void setFixtureInteractive(bool on);
     bool isFixtureInteractive() const { return m_fixtureInteractive; }
@@ -95,6 +104,12 @@ public:
 
     /** Project a world point to widget coordinates (false if behind the camera). */
     bool worldToScreen(const QVector3D &world, QPointF &screen) const;
+
+    /** Immutable snapshot consumed by GPU render backends (M1+). */
+    Preview3DSceneFrame sceneFrame() const;
+
+    /** Counters and timing from the last rendered frame (M0 baseline). */
+    const Preview3DRenderStats &lastRenderStats() const { return m_lastRenderStats; }
 
     /** Camera state, for saving/restoring the view. */
     void camera(double &yaw, double &pitch, double &dist, QVector3D &target) const;
@@ -230,6 +245,8 @@ private:
 
     // fixture interaction
     FixtureScene *m_fixtureScene;
+    Preview3DRenderBackend *m_renderBackend;
+    Preview3DRenderSettings m_renderSettings;
     bool m_fixtureInteractive;
     int m_selectedFixture;
     bool m_dragFixture;
@@ -243,6 +260,7 @@ private:
     QColor m_selectColor;
 
     SoftwareRaster m_raster;
+    Preview3DRenderStats m_lastRenderStats;
     QImage m_vignette;
 
     // Beam collision occluders (truss segments), rebuilt each frame.
