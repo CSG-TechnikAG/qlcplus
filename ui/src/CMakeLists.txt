@@ -147,6 +147,9 @@ add_library(${module_name}
     virtualconsole/vcbuttonproperties.cpp virtualconsole/vcbuttonproperties.h virtualconsole/vcbuttonproperties.ui
     virtualconsole/vcclock.cpp virtualconsole/vcclock.h
     virtualconsole/vcclockproperties.cpp virtualconsole/vcclockproperties.h virtualconsole/vcclockproperties.ui
+    virtualconsole/vclivemusic.cpp virtualconsole/vclivemusic.h
+    virtualconsole/vclivemusicpreset.cpp virtualconsole/vclivemusicpreset.h
+    virtualconsole/vclivemusicproperties.cpp virtualconsole/vclivemusicproperties.h
     virtualconsole/vcstagemap.cpp virtualconsole/vcstagemap.h
     virtualconsole/vccuelist.cpp virtualconsole/vccuelist.h
     virtualconsole/vccuelistproperties.cpp virtualconsole/vccuelistproperties.h virtualconsole/vccuelistproperties.ui
@@ -208,13 +211,16 @@ target_link_libraries(${module_name} PUBLIC
     qlcplusengine
 )
 
-# GPU 3D preview backends are built when the Qt OpenGL module is available.
+# The GPU 3D preview is a first-class part of QLC+ 4. Qt's OpenGL module is
+# required above, so an OpenGL-less Qt installation fails the configure step
+# instead of silently producing a software-only binary (which is what made CI
+# releases differ from local builds).
 if(QT_VERSION_MAJOR GREATER 5)
-    find_package(Qt6 QUIET COMPONENTS OpenGL)
-    if(TARGET Qt6::OpenGL)
-        target_link_libraries(${module_name} PRIVATE Qt6::OpenGL)
-        target_compile_definitions(${module_name} PRIVATE QLC_PREVIEW3D_OPENGL)
-    endif()
+    target_link_libraries(${module_name} PRIVATE Qt${QT_VERSION_MAJOR}::OpenGL)
+    target_compile_definitions(${module_name} PRIVATE QLC_PREVIEW3D_OPENGL)
+    message(STATUS "3D preview: OpenGL GPU renderer enabled")
+else()
+    target_link_libraries(${module_name} PRIVATE Qt${QT_VERSION_MAJOR}::OpenGL)
 endif()
 
 # Add resources and RGB Script deps

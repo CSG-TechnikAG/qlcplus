@@ -173,6 +173,7 @@ protected:
     QAction* m_addClockAction;
     QAction* m_addAnimationAction;
     QAction* m_addStageMapAction;
+    QAction* m_addLiveMusicAction;
 
     QAction* m_toolsSettingsAction;
     QAction* m_functionWizardAction;
@@ -247,6 +248,7 @@ public slots:
     void slotAddClock();
     void slotAddAnimation();
     void slotAddStageMap();
+    void slotAddLiveMusic();
 
     /*********************************************************************
      * Tools menu callbacks

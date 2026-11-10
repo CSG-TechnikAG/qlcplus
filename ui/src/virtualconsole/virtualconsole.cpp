@@ -61,6 +61,7 @@
 #include "vcxypad.h"
 #include "vcclock.h"
 #include "vcstagemap.h"
+#include "vclivemusic.h"
 #include "functionwizard.h"
 #include "doc.h"
 
@@ -104,6 +105,7 @@ VirtualConsole::VirtualConsole(QWidget* parent, Doc* doc)
     , m_addClockAction(NULL)
     , m_addAnimationAction(NULL)
     , m_addStageMapAction(NULL)
+    , m_addLiveMusicAction(NULL)
 
     , m_toolsSettingsAction(NULL)
     , m_functionWizardAction(NULL)
@@ -353,6 +355,9 @@ void VirtualConsole::initActions()
     m_addStageMapAction = new QAction(AppIcons::icon("vc-stagemap", 26), tr("New Stage Map"), this);
     connect(m_addStageMapAction, SIGNAL(triggered(bool)), this, SLOT(slotAddStageMap()), Qt::QueuedConnection);
 
+    m_addLiveMusicAction = new QAction(AppIcons::icon("audio", 26), tr("New Live Music Mode"), this);
+    connect(m_addLiveMusicAction, SIGNAL(triggered(bool)), this, SLOT(slotAddLiveMusic()), Qt::QueuedConnection);
+
     /* Put add actions under the same group */
     m_addActionGroup = new QActionGroup(this);
     m_addActionGroup->setExclusive(false);
@@ -371,6 +376,7 @@ void VirtualConsole::initActions()
     m_addActionGroup->addAction(m_addClockAction);
     m_addActionGroup->addAction(m_addAnimationAction);
     m_addActionGroup->addAction(m_addStageMapAction);
+    m_addActionGroup->addAction(m_addLiveMusicAction);
 
     /* Tools menu actions */
     m_toolsSettingsAction = new QAction(AppIcons::icon("settings-2", 26), tr("Virtual Console Settings"), this);
@@ -503,6 +509,7 @@ void VirtualConsole::initMenuBar()
     m_addMenu->addAction(m_addCueListAction);
     m_addMenu->addAction(m_addAnimationAction);
     m_addMenu->addAction(m_addStageMapAction);
+    m_addMenu->addAction(m_addLiveMusicAction);
     m_addMenu->addAction(m_addAudioTriggersAction);
     m_addMenu->addSeparator();
     m_addMenu->addAction(m_addFrameAction);
@@ -587,6 +594,7 @@ void VirtualConsole::initMenuBar()
     m_toolbar->addAction(m_addCueListAction);
     m_toolbar->addAction(m_addAnimationAction);
     m_toolbar->addAction(m_addStageMapAction);
+    m_toolbar->addAction(m_addLiveMusicAction);
     m_toolbar->addAction(m_addFrameAction);
     m_toolbar->addAction(m_addSoloFrameAction);
     m_toolbar->addAction(m_addLabelAction);
@@ -632,6 +640,7 @@ void VirtualConsole::initMenuBar()
     addAction(m_addCueListAction);
     addAction(m_addAnimationAction);
     addAction(m_addStageMapAction);
+    addAction(m_addLiveMusicAction);
     addAction(m_addFrameAction);
     addAction(m_addSoloFrameAction);
     addAction(m_addLabelAction);
@@ -1051,6 +1060,17 @@ void VirtualConsole::slotAddStageMap()
 
     VCStageMap* map = new VCStageMap(parent, m_doc);
     setupWidget(map, parent);
+    m_doc->setModified();
+}
+
+void VirtualConsole::slotAddLiveMusic()
+{
+    VCWidget* parent(closestParent());
+    if (parent == NULL)
+        return;
+
+    VCLiveMusic* live = new VCLiveMusic(parent, m_doc);
+    setupWidget(live, parent);
     m_doc->setModified();
 }
 

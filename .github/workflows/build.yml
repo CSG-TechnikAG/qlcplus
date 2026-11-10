@@ -1,8 +1,22 @@
-name: QLCplus Github Actions CI Build
+name: QLCplus Github Actions CI Build & Release
 
 on:
-  # Manual runs only (Actions tab -> "Run workflow")
+  # A version tag creates a GitHub release with the packaged v4 installers.
+  push:
+    tags:
+      - 'v4.*'
+  # Manual runs can build artifacts only, or publish/update the current
+  # version's GitHub release (enabled by default).
   workflow_dispatch:
+    inputs:
+      publish_release:
+        description: 'Publish a GitHub release for the current QLC++ 4 version'
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
 
 jobs:
   build-linux:
@@ -66,6 +80,10 @@ jobs:
           echo "INSTALL_ROOT=`pwd`/install_root" >> $GITHUB_ENV
           echo "BUILD_DATE=`date -u '+%Y%m%d'`" >> $GITHUB_ENV
           echo "GIT_REV=`git rev-parse --short HEAD`" >> $GITHUB_ENV
+          QLC_VERSION=$(sed -nE 's/^project\(qlcplus VERSION ([0-9]+\.[0-9]+).*/\1/p' CMakeLists.txt | head -1)
+          echo "QLC_VERSION=${QLC_VERSION}" >> $GITHUB_ENV
+          echo "QLC_VERSION_UNDERSCORE=$(echo ${QLC_VERSION} | tr '.' '_')" >> $GITHUB_ENV
+          echo "QLC_VERSION_TAG=v${QLC_VERSION}" >> $GITHUB_ENV
 
       - name: Set Qt ENV variables (v4)
         if: ${{ endsWith( matrix.task, 'v4') }}
@@ -151,6 +169,12 @@ jobs:
         if: ${{ matrix.task == 'build-v4' }}
         run: |
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$QTDIR/lib/cmake/" -Dappimage=ON -DINSTALL_ROOT=${INSTALL_ROOT} -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+
+      - name: Verify GPU 3D preview is enabled (v4)
+        if: ${{ matrix.task == 'build-v4' }}
+        run: |
+          grep -q "QLC_PREVIEW3D_OPENGL" build/ui/src/CMakeFiles/qlcplusui.dir/flags.make
+          echo "GPU 3D preview renderer is compiled in"
 
       - name: Configure for v5 build
         if: ${{ matrix.task == 'build-v5' }}
@@ -252,19 +276,32 @@ jobs:
           wget -c https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage -O ./appimagetool-x86_64.AppImage
           chmod a+x ./appimagetool-x86_64.AppImage
           ./appimagetool-x86_64.AppImage -v ${INSTALL_ROOT}
-          mv -v Q_Light_Controller_++_-_QLC+-x86_64.AppImage qlcplus-${{env.TASK}}-${{env.APPVERSION}}-${{env.BUILD_DATE}}-${{env.GIT_REV}}.AppImage
+          if [ "${TASK}" == "v4" ]; then
+            APPIMAGE="QLC++_${QLC_VERSION_UNDERSCORE}_Linux.AppImage"
+          else
+            APPIMAGE="qlcplus-${TASK}-${APPVERSION}-${BUILD_DATE}-${GIT_REV}.AppImage"
+          fi
+          mv -v Q_Light_Controller_++_-_QLC+-x86_64.AppImage "${APPIMAGE}"
+          echo "APPIMAGE=${APPIMAGE}" >> $GITHUB_ENV
 
       - name: Test Load AppImage
-        if: ${{ matrix.task == 'build-v5' }}
-        run: |
-          ./qlcplus-${{env.TASK}}-${{env.APPVERSION}}-${{env.BUILD_DATE}}-${{env.GIT_REV}}.AppImage --platform offscreen --version
-
-      - name: Store AppImage artifacts
         if: ${{ ! startsWith( matrix.task, 'coverage') }}
+        run: |
+          ./${APPIMAGE} --platform offscreen --version
+
+      - name: Store v4 Linux release artifact
+        if: ${{ matrix.task == 'build-v4' }}
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ matrix.task }}-AppImage
-          path: qlcplus-${{env.TASK}}-${{env.APPVERSION}}-${{env.BUILD_DATE}}-${{env.GIT_REV}}.AppImage
+          name: release-Linux
+          path: ${{ env.APPIMAGE }}
+
+      - name: Store v5 AppImage artifact
+        if: ${{ matrix.task == 'build-v5' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: build-v5-AppImage
+          path: ${{ env.APPIMAGE }}
 
   build-windows:
     runs-on: windows-latest
@@ -302,6 +339,10 @@ jobs:
           echo "QTDIR=/d/a/qlcplus/qlcplus/qt/Qt/${{ env.QT_VERSION }}/mingw_64" >> $GITHUB_ENV
           echo "BUILD_DATE=`date -u '+%Y%m%d'`" >> $GITHUB_ENV
           echo "GIT_REV=`git rev-parse --short HEAD`" >> $GITHUB_ENV
+          QLC_VERSION=$(sed -nE 's/^project\(qlcplus VERSION ([0-9]+\.[0-9]+).*/\1/p' CMakeLists.txt | head -1)
+          echo "QLC_VERSION=${QLC_VERSION}" >> $GITHUB_ENV
+          echo "QLC_VERSION_UNDERSCORE=$(echo ${QLC_VERSION} | tr '.' '_')" >> $GITHUB_ENV
+          echo "QLC_VERSION_TAG=v${QLC_VERSION}" >> $GITHUB_ENV
 
       - name: Set v4 ENV variables
         shell: bash
@@ -456,7 +497,21 @@ jobs:
           makensis -X'SetCompressor /FINAL lzma' ${{env.NSIS_SCRIPT}}
           mv /c/qlcplus/${{env.OUTFILE}} /d/a/qlcplus/qlcplus/${{matrix.task}}-${{env.OUTFILE}}
 
-      - name: Store executable artifact
+      - name: Prepare v4 Windows release asset
+        shell: bash
+        if: ${{ matrix.task == 'build-v4' }}
+        run: |
+          cp "${{matrix.task}}-${{env.OUTFILE}}" "QLC++_${QLC_VERSION_UNDERSCORE}_Windows.exe"
+
+      - name: Store v4 Windows release artifact
+        if: ${{ matrix.task == 'build-v4' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-Windows
+          path: QLC++_${{ env.QLC_VERSION_UNDERSCORE }}_Windows.exe
+
+      - name: Store v5 executable artifact
+        if: ${{ matrix.task == 'build-v5' }}
         uses: actions/upload-artifact@v7
         with:
           name: QLC+-${{matrix.task}}-${{env.APPVERSION}}-${{env.BUILD_DATE}}-${{env.GIT_REV}}.exe
@@ -496,6 +551,10 @@ jobs:
           echo "GIT_REV=`git rev-parse --short HEAD`" >> $GITHUB_ENV
           echo "QTDIR=${{ github.workspace }}/qt/Qt/${{ env.QT_VERSION }}/macos" >> $GITHUB_ENV
           echo "NPROC=`sysctl -n hw.ncpu`" >> $GITHUB_ENV
+          QLC_VERSION=$(sed -nE 's/^project\(qlcplus VERSION ([0-9]+\.[0-9]+).*/\1/p' CMakeLists.txt | head -1)
+          echo "QLC_VERSION=${QLC_VERSION}" >> $GITHUB_ENV
+          echo "QLC_VERSION_UNDERSCORE=$(echo ${QLC_VERSION} | tr '.' '_')" >> $GITHUB_ENV
+          echo "QLC_VERSION_TAG=v${QLC_VERSION}" >> $GITHUB_ENV
 
       - name: Set v4 ENV variables
         shell: bash
@@ -656,7 +715,21 @@ jobs:
           xcrun stapler staple "${DMG_PATH}"
           rm -f $RUNNER_TEMP/AuthKey.p8
 
-      - name: Store DMG artifact
+      - name: Prepare v4 macOS release asset
+        shell: bash
+        if: ${{ matrix.task == 'build-v4' }}
+        run: |
+          cp "QLC+_${{ matrix.task }}.dmg" "QLC++_${QLC_VERSION_UNDERSCORE}_MacOs.dmg"
+
+      - name: Store v4 macOS release artifact
+        if: ${{ matrix.task == 'build-v4' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-MacOs
+          path: QLC++_${{ env.QLC_VERSION_UNDERSCORE }}_MacOs.dmg
+
+      - name: Store v5 DMG artifact
+        if: ${{ matrix.task == 'build-v5' }}
         uses: actions/upload-artifact@v7
         with:
           name: QLC+-${{env.APPVERSION}}-${{env.BUILD_DATE}}-${{env.GIT_REV}}.dmg
@@ -667,3 +740,54 @@ jobs:
         if: ${{ always() && env.MACOS_CERT_P12 != '' }}
         run: |-
           security delete-keychain "${MACOS_KEYCHAIN}" || true
+
+  release:
+    name: Publish QLC++ 4 GitHub release
+    needs: [build-linux, build-windows, build-macos]
+    if: ${{ always() && ((github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v4.')) || (github.event_name == 'workflow_dispatch' && inputs.publish_release == true)) }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          submodules: false
+
+      - name: Download v4 release assets
+        uses: actions/download-artifact@v7
+        with:
+          pattern: release-*
+          path: release-assets
+          merge-multiple: true
+
+      - name: Compute release tag
+        run: |
+          if [ "${GITHUB_EVENT_NAME}" = "push" ]; then
+            TAG="${GITHUB_REF_NAME}"
+          else
+            QLC_VERSION=$(sed -nE 's/^project\(qlcplus VERSION ([0-9]+\.[0-9]+).*/\1/p' CMakeLists.txt | head -1)
+            TAG="v${QLC_VERSION}"
+          fi
+          echo "RELEASE_TAG=${TAG}" >> $GITHUB_ENV
+          echo "RELEASE_VERSION=${TAG#v}" >> $GITHUB_ENV
+          echo "RELEASE_TITLE=QLC++ ${TAG#v}" >> $GITHUB_ENV
+          echo "Publishing ${TAG}"
+
+      - name: List release assets
+        run: ls -lh release-assets
+
+      - name: Create or update GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: ${{ env.RELEASE_TITLE }}
+          target_commitish: ${{ github.sha }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          overwrite_files: true
+          files: |
+            release-assets/QLC++_*_Linux.AppImage
+            release-assets/QLC++_*_MacOs.dmg
+            release-assets/QLC++_*_Windows.exe

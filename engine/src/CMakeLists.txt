@@ -36,6 +36,7 @@ add_library(${module_name} SHARED
     inputpatch.cpp inputpatch.h
     ioplugincache.cpp ioplugincache.h
     keypadparser.cpp keypadparser.h
+    livemusicengine.cpp livemusicengine.h
     mastertimer.cpp mastertimer.h
     monitorproperties.cpp monitorproperties.h
     outputpatch.cpp outputpatch.h

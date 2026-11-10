@@ -54,6 +54,7 @@
 #include "vcxypad.h"
 #include "vcclock.h"
 #include "vcstagemap.h"
+#include "vclivemusic.h"
 #include "apputil.h"
 #include "doc.h"
 
@@ -1294,6 +1295,18 @@ bool VCFrame::loadXML(QXmlStreamReader &root)
             {
                 addWidgetToPageMap(map);
                 map->show();
+            }
+        }
+        else if (root.name() == KXMLQLCVCLiveMusic)
+        {
+            /* Create a new Live Music widget into its parent */
+            VCLiveMusic* live = new VCLiveMusic(this, m_doc);
+            if (live->loadXML(root) == false)
+                delete live;
+            else
+            {
+                addWidgetToPageMap(live);
+                live->show();
             }
         }
         else if (root.name() == KXMLQLCVCMatrix)

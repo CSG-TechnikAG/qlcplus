@@ -134,7 +134,8 @@ public:
         AudioTriggersWidget,
         AnimationWidget,
         ClockWidget,
-        StageMapWidget
+        StageMapWidget,
+        LiveMusicWidget
     };
 
 public:
